@@ -103,6 +103,8 @@ dependencies {
     implementation 'org.nanohttpd:nanohttpd-websocket:2.3.1'
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'com.github.AdrienPoupa:jaudiotagger:2.2.3'
+    // 词幕（Lyricon）Provider：状态栏歌词推送，失败不影响播放器本体
+    implementation 'io.github.proify.lyricon:provider:0.1.70'
     testImplementation "junit:junit:$junitVersion"
     // JVM 单测里 org.json 是 android.jar 的 stub，需引入真实实现供 FmFetcher 等解析测试使用
     testImplementation 'org.json:json:20231013'

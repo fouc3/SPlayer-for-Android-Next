@@ -6,6 +6,7 @@ import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
+import { tickLyriconPush } from "@/services/lyriconProvider";
 import { isAndroidNative } from "@/services/bridge";
 import * as playStats from "./stats";
 import {
@@ -107,6 +108,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       abLoop.checkLoop(adjusted);
       // 推进延时缓存调度
       cacheScheduler.tick(adjusted);
+      // 词幕状态栏歌词：同步播放进度（内部节流 ~4Hz）
+      tickLyriconPush();
       const track = useMediaStore().track;
       if (track?.cueEndMs != null && status.isPlaying && status.duration > 0) {
         if (adjusted >= status.duration - 250) await finishCurrentTrack();

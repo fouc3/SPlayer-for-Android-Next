@@ -436,6 +436,8 @@ class PlaybackUrlResolver(
     if (track == null) return null
     if (!track.url.isNullOrEmpty()) return track.url
     if (track.source == "local") return track.path
+    // 已下载文件优先：下载即缓存，命中后无需再走网络
+    if (!track.downloadPath.isNullOrEmpty()) return track.downloadPath
     lookupSongCache(track)?.let { return it }
     val pluginSource = PLUGIN_SOURCES[track.source]
     if (track.source == "netease" && track.songId > 0) {

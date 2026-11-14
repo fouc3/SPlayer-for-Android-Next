@@ -14,6 +14,8 @@ export interface AndroidDownloadFileRequest {
   fileName: string;
   directoryUri: string;
   subPath?: string;
+  /** 已有同音质播放缓存的本地绝对路径；命中时直接复制，不再走网络 */
+  cacheFilePath?: string;
 }
 
 /** 下载文件结果 */
@@ -21,6 +23,8 @@ export interface AndroidDownloadResult {
   status: "success" | "skipped";
   path: string;
   fileName?: string;
+  /** 是否由播放缓存复制而来（未走网络） */
+  fromCache?: boolean;
 }
 
 /** 写文本文件请求 */
@@ -49,6 +53,14 @@ export interface AndroidEmbedTagsRequest {
   artist?: string;
   /** 专辑名 */
   album?: string;
+  /** 专辑艺术家 */
+  albumArtist?: string;
+  /** 曲目序号 */
+  trackNumber?: string;
+  /** 碟号 */
+  discNumber?: string;
+  /** 发行年份 */
+  year?: string;
   /** 歌词文本 */
   lyrics?: string;
   /** 是否内嵌封面 */
@@ -118,6 +130,14 @@ export interface AndroidDownloadPlugin {
   getDownloadDirectoryInfo(options: {
     directoryUri: string;
   }): Promise<AndroidDownloadDirectoryInfo>;
+  /** 查询下载目录中指定文件是否仍存在 */
+  fileExists(options: {
+    directoryUri: string;
+    fileName: string;
+    subPath?: string;
+  }): Promise<{ exists: boolean; path?: string }>;
+  /** 读取远程文件头部若干字节（base64），用于嗅探真实音频格式 */
+  sniffAudioHead(options: { url: string; maxBytes?: number }): Promise<{ head: string }>;
   /** 列出下载目录下的全部音乐文件 */
   listDownloadedSongs(options: { directoryUri: string }): Promise<AndroidLocalScanResult>;
   /** SAF 选取本地音乐目录（只读权限） */

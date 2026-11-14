@@ -461,6 +461,10 @@ export const useSettingsStore = defineStore(
       ) {
         syncNativeCacheMaxBytes();
       }
+      // 词幕状态栏歌词开关：开启即注册 Provider 并推送当前歌词，关闭即释放
+      if (keyPath === "androidLyric.statusBarEnabled") {
+        void import("@/services/lyriconProvider").then((m) => m.syncLyriconSetting());
+      }
     };
 
     /** 本地配置写入后处理 */

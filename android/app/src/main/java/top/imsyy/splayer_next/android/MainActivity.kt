@@ -23,6 +23,7 @@ import top.imsyy.splayer_next.android.download.AndroidDownloadPlugin
 import top.imsyy.splayer_next.android.library.AndroidLibraryPlugin
 import top.imsyy.splayer_next.android.lyric.AndroidLocalLyricPlugin
 import top.imsyy.splayer_next.android.lyric.AndroidMainLyricPlugin
+import top.imsyy.splayer_next.android.lyricon.AndroidLyriconPlugin
 import top.imsyy.splayer_next.android.playback.AndroidNativePlaybackPlugin
 import top.imsyy.splayer_next.android.server.AndroidLanSharePlugin
 import top.imsyy.splayer_next.android.server.ApiServerPlugin
@@ -59,6 +60,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(AndroidAppIconPlugin::class.java)
     registerPlugin(AndroidLocalLyricPlugin::class.java)
     registerPlugin(AndroidMainLyricPlugin::class.java)
+    registerPlugin(AndroidLyriconPlugin::class.java)
     registerPlugin(AndroidDownloadPlugin::class.java)
     registerPlugin(AndroidCachePlugin::class.java)
     registerPlugin(AndroidSongCachePlugin::class.java)

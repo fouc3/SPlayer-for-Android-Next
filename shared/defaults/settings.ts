@@ -120,6 +120,7 @@ export const defaultSystemConfig: SystemConfig = {
   androidLyric: {
     renderMode: "legacy",
     unlockFpsLimit: false,
+    statusBarEnabled: false,
   },
   cache: {
     enabled: true,

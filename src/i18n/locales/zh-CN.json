@@ -607,6 +607,8 @@
       "manage": "批量管理",
       "selected": "已选 {count} 首",
       "invert": "反选",
+      "selectAll": "全选",
+      "deselectAll": "取消全选",
       "addToQueue": "添加到播放列表",
       "download": "批量下载",
       "exit": "退出"
@@ -2402,6 +2404,10 @@
       "button": "清空全部",
       "confirmTitle": "清空全部数据库缓存？",
       "confirmDesc": "将删除上方全部数据库缓存，操作不可恢复"
+    },
+    "androidStatusBarLyric": {
+      "label": "词幕状态栏歌词",
+      "description": "把当前播放的逐字歌词推送到词幕（Lyricon），在系统状态栏显示；需要已安装词幕并启用系统界面作用域"
     }
   },
   "collection": {

@@ -363,6 +363,8 @@ export interface AndroidLyricSettings {
   renderMode: AndroidLyricRenderMode;
   /** 是否解锁 legacy 引擎的帧率限制（开启后普通行切换跳过全量同步，帧率提升但发热加重） */
   unlockFpsLimit: boolean;
+  /** 是否把歌词推送到词幕（Lyricon），在系统状态栏显示 */
+  statusBarEnabled: boolean;
 }
 
 /** 歌曲缓存配置 */

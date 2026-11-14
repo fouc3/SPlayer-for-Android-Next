@@ -130,6 +130,16 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- 词幕（Lyricon）Provider 注册元数据：让 Lyricon 把 SPlayer-Next 识别为歌词提供端 -->
+        <meta-data android:name="lyricon_module" android:value="true" />
+        <meta-data android:name="lyricon_module_author" android:value="SPlayer-Next" />
+        <meta-data
+            android:name="lyricon_module_description"
+            android:value="SPlayer-Next 状态栏歌词提供端" />
+        <meta-data
+            android:name="lyricon_module_tags"
+            android:resource="@array/lyricon_module_tags" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -8,6 +8,7 @@
 import type { DownloadTask, DownloadProgress, DownloadStatus } from "@shared/types/download";
 import { initDownloadResolver } from "@/services/download/resolver";
 import bridge from "@/services/bridge";
+import { mediaSessionManager } from "@/core/player/MediaSessionManager";
 
 export const useDownloadStore = defineStore("download", () => {
   /** 是否尚未结束 */
@@ -34,6 +35,8 @@ export const useDownloadStore = defineStore("download", () => {
 
   /** 替换或插入一条任务 */
   const applyTask = (task: DownloadTask): void => {
+    // 下载完成后刷新原生已下载快照，后续播放直接使用本地文件
+    if (task.status === "done") void mediaSessionManager.refreshDownloadedTracks();
     const active = activeTasks.value.filter((item) => item.taskId !== task.taskId);
     const history = historyTasks.value.filter((item) => item.taskId !== task.taskId);
     if (isActive(task.status)) {

@@ -29,6 +29,7 @@ import IconLucideArrowLeftRight from "~icons/lucide/arrow-left-right";
 import IconLucideX from "~icons/lucide/x";
 import IconLucideCloud from "~icons/lucide/cloud";
 import IconLucideCloudOff from "~icons/lucide/cloud-off";
+import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 
@@ -252,6 +253,29 @@ const batch = useMultiSelect(sortedItems, {
 });
 const { deleteConfirmOpen, deleteDialogTitle, deleteDialogContent } = batch;
 
+/** 长按进入批量管理的触发延时（毫秒） */
+const LONG_PRESS_DELAY = 500;
+/** 长按期间允许的手指位移（像素），超出视为滚动并取消 */
+const LONG_PRESS_MOVE_TOLERANCE = 10;
+
+/** 待触发的长按定时器 */
+let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+/** 长按起点坐标，用于判断是否为滚动 */
+let longPressOrigin: { x: number; y: number } | null = null;
+/** 本轮长按是否已生效（生效后需吞掉随之而来的 click） */
+let longPressFired = false;
+/** 最近一次指针类型（touch 时禁用右键/长按菜单，长按专用于多选） */
+const lastPointerType = ref("");
+
+/** 清除长按定时器并复位记录 */
+const clearLongPress = (): void => {
+  if (longPressTimer !== null) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  longPressOrigin = null;
+};
+
 /** 触发歌曲行的播放入口 */
 const activateTrack = (item: Track, index: number): void => {
   if (batch.active.value) {
@@ -263,6 +287,56 @@ const activateTrack = (item: Track, index: number): void => {
     return;
   }
   player.playFrom(sortedItems.value, index, props.playbackContext);
+};
+
+/**
+ * 手指按下：普通模式下启动长按计时，到时进入多选并选中该曲目
+ * @param event - 指针事件，用于记录起点坐标
+ * @param item - 按下的曲目
+ */
+const onRowPointerDown = (event: PointerEvent, item: Track): void => {
+  if (batch.active.value) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  if ((event.target as HTMLElement | null)?.closest("button,[role='checkbox']")) return;
+  clearLongPress();
+  longPressFired = false;
+  lastPointerType.value = event.pointerType;
+  longPressOrigin = { x: event.clientX, y: event.clientY };
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    longPressFired = true;
+    navigator.vibrate?.(20);
+    batch.enter();
+    batch.toggle(item.id);
+  }, LONG_PRESS_DELAY);
+};
+
+/**
+ * 手指移动：超出容差即判定为滚动，取消长按
+ * @param event - 指针事件
+ */
+const onRowPointerMove = (event: PointerEvent): void => {
+  if (longPressTimer === null || !longPressOrigin) return;
+  const dx = Math.abs(event.clientX - longPressOrigin.x);
+  const dy = Math.abs(event.clientY - longPressOrigin.y);
+  if (dx > LONG_PRESS_MOVE_TOLERANCE || dy > LONG_PRESS_MOVE_TOLERANCE) clearLongPress();
+};
+
+/**
+ * 行点击：长按刚生效时吞掉这次 click；多选模式切换选中；否则播放
+ * @param item - 被点击的曲目
+ * @param index - 列表索引
+ */
+const onRowClick = (item: Track, index: number): void => {
+  if (longPressFired) {
+    longPressFired = false;
+    return;
+  }
+  if (batch.active.value) {
+    batch.toggle(item.id);
+    return;
+  }
+  activateTrack(item, index);
 };
 
 /** 添加到歌单相关 */
@@ -299,11 +373,32 @@ const { items: contextMenuItems, handleSelect: onContextMenu } = useTrackMenu(co
 
 /** 仅当右键命中歌曲行时放行上下文菜单 */
 const onListContextMenu = (event: MouseEvent): void => {
+  // 触摸端：长按专用于多选，任何原生上下文菜单都拦掉
+  if (lastPointerType.value === "touch" && !menuForced.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   const target = event.target as HTMLElement | null;
   if (!target?.closest("[data-song-item]")) {
     event.preventDefault();
     event.stopPropagation();
   }
+};
+
+/**
+ * 行上下文菜单：触摸端长按已用于进入多选，抑制 WebView 默认的上下文菜单
+ * @param event - 右键/长按事件
+ * @param item - 命中的曲目
+ */
+const onRowContextMenu = (event: MouseEvent, item: Track): void => {
+  // 触摸端长按专用于多选；批处理模式下也不再弹出单项菜单
+  if (longPressFired || (isTouchInput.value && !menuForced.value)) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  contextTrack.value = item;
 };
 
 /**
@@ -326,6 +421,34 @@ const emit = defineEmits<{
   change: [removedIds: string[]];
 }>();
 
+/** 触摸设备：长按专用于多选，禁用容器级右键菜单 */
+const isTouchInput = computed(() => lastPointerType.value === "touch");
+
+/** 触摸端临时放行一次右键菜单（「更多」按钮触发） */
+const menuForced = ref(false);
+
+/**
+ * 触摸端打开单曲菜单：临时解除拦截并派发一次 contextmenu
+ * @param event - 点击事件，用于取锚点坐标
+ * @param item - 目标曲目
+ */
+const openTrackMenu = (event: MouseEvent, item: Track): void => {
+  contextTrack.value = item;
+  menuForced.value = true;
+  const el = event.currentTarget as HTMLElement;
+  el.dispatchEvent(
+    new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    }),
+  );
+  window.setTimeout(() => {
+    menuForced.value = false;
+  }, 300);
+};
+
 onActivated(batch.exit);
 
 defineExpose({
@@ -336,7 +459,11 @@ defineExpose({
 
 <template>
   <div class="relative h-full" @contextmenu.capture="onListContextMenu">
-    <SContextMenu :items="contextMenuItems" @select="onContextMenu">
+    <SContextMenu
+      :items="contextMenuItems"
+      :disabled="isTouchInput && !menuForced"
+      @select="onContextMenu"
+    >
       <template #header>
         <div v-if="contextTrack">
           <div class="flex items-center gap-1.5 px-1 py-1">
@@ -387,23 +514,42 @@ defineExpose({
             <!-- 批量模式 -->
             <div
               v-if="batch.active.value"
-              class="flex items-center gap-2 pl-3 pr-3 mx-3 h-10 text-sm"
+              class="flex items-center gap-2 pl-2 pr-3 mx-3 mb-1.5 h-11 text-sm rounded-xl bg-black border border-solid border-white/20 shadow-lg overflow-x-auto no-scrollbar"
             >
-              <div
-                v-if="showIndex"
-                class="w-8 shrink-0 flex items-center justify-center song-list-batch-checkbox"
+              <!-- 多选边框：黑底空心框，全选后变实心并显示镂空勾 -->
+              <button
+                type="button"
+                role="checkbox"
+                :aria-checked="
+                  batch.isPartial.value ? 'mixed' : batch.isAllSelected.value ? 'true' : 'false'
+                "
+                :aria-label="t('songList.batch.selectAll')"
+                class="shrink-0 size-6 rounded-[7px] border-2 border-solid flex items-center justify-center transition-colors duration-150"
+                :class="
+                  batch.isAllSelected.value || batch.isPartial.value
+                    ? 'bg-white border-white text-black'
+                    : 'bg-black border-white/70 text-transparent'
+                "
+                @click.stop="batch.toggleSelectAll"
               >
-                <SCheckbox
-                  :checked="batch.isAllSelected.value"
-                  :indeterminate="batch.isPartial.value"
-                  size="small"
-                  @update:checked="batch.toggleSelectAll"
-                  @click.stop
-                />
-              </div>
+                <IconLucideMinus v-if="batch.isPartial.value" class="size-3.5" />
+                <IconLucideCheck v-else class="size-3.5" />
+              </button>
               <span class="text-on-surface-variant tabular-nums shrink-0">
                 {{ t("songList.batch.selected", { count: batch.selectedCount.value }) }}
               </span>
+              <SButton
+                variant="ghost"
+                size="small"
+                class="shrink-0"
+                @click="batch.toggleSelectAll"
+              >
+                {{
+                  batch.isAllSelected.value
+                    ? t("songList.batch.deselectAll")
+                    : t("songList.batch.selectAll")
+                }}
+              </SButton>
               <SDivider vertical />
               <SButton
                 variant="ghost"
@@ -570,9 +716,14 @@ defineExpose({
                     ? 'bg-primary/16 border-primary/40'
                     : 'bg-surface-panel border-primary/12 hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12',
               ]"
-              @click="batch.active.value ? batch.toggle(item.id) : undefined"
+              @click="onRowClick(item, index)"
               @dblclick="onTrackDblClick(item, index)"
-              @contextmenu="contextTrack = item"
+              @pointerdown="onRowPointerDown($event, item)"
+              @pointermove="onRowPointerMove"
+              @pointerup="clearLongPress"
+              @pointercancel="clearLongPress"
+              @pointerleave="clearLongPress"
+              @contextmenu="onRowContextMenu($event, item)"
             >
               <!-- 序号 / 多选 -->
               <div
@@ -638,7 +789,7 @@ defineExpose({
                   />
                   <div
                     v-if="useMobileLayout && showIndex"
-                    class="absolute left-0 top-0 z-2 flex items-center justify-center rounded-br-md rounded-tl-lg border border-solid border-white/10 bg-surface-panel/90 text-[10px] font-bold leading-none text-on-surface shadow-sm"
+                    class="absolute left-0 top-0 z-2 flex items-center justify-center rounded-br-md rounded-tl-lg border border-solid border-white/25 bg-black/90 text-[10px] font-bold leading-none text-on-surface shadow-sm"
                     :class="batch.active.value ? 'h-6 w-6' : 'h-4 min-w-4 px-0.5'"
                   >
                     <SCheckbox
@@ -781,6 +932,20 @@ defineExpose({
                     </SIconSwap>
                   </template>
                 </SButton>
+                <!-- 触摸端没有右键，长按已改作多选，这里提供单曲菜单入口 -->
+                <SButton
+                  v-if="!batch.active.value"
+                  type="primary"
+                  variant="text"
+                  circle
+                  :size="24"
+                  :icon-size="18"
+                  @click.stop="openTrackMenu($event, item)"
+                >
+                  <template #icon>
+                    <IconLucideMoreHorizontal />
+                  </template>
+                </SButton>
                 <div
                   v-if="showDuration"
                   class="text-[11px] tabular-nums leading-none text-center"
@@ -911,5 +1076,14 @@ defineExpose({
 .song-list-mobile-item-wrap {
   padding-left: 15px;
   padding-right: 9px;
+}
+
+/* 批量操作条横向滚动时隐藏滚动条（移动端手指滑动即可） */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 </style>

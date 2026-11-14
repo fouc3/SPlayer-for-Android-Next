@@ -36,6 +36,7 @@ import {
   type AndroidAppIconVariant,
 } from "@/plugins/androidAppIcon";
 import { AndroidSongCache } from "@/plugins/androidSongCache";
+import localforage from "localforage";
 import { AndroidLanShare, type LanDevice } from "@/plugins/androidLanShare";
 import type {
   PlayerApi,
@@ -1281,6 +1282,84 @@ function electronApi(): Window["api"] {
 
 // ─── Android 下载管理器 ────────────────────────────────────────────────────────
 
+/** 已下载记录持久化（trackId + 音质 → SAF 文件），供重启后继续「优先播放已下载」 */
+export interface DownloadedRecord {
+  key: string;
+  trackId: string;
+  qualityLevel: string;
+  directoryUri: string;
+  fileName: string;
+  subPath?: string;
+  filePath: string;
+  updatedAt: number;
+}
+
+const downloadDb = localforage.createInstance({ name: "splayer", storeName: "downloads" });
+/**
+ * 歌曲缓存键（对齐 audioSource.cacheKeyForTrack）
+ * @param track - 目标曲目
+ * @param level - 本次下载音质档位
+ * @returns 键；无法参与缓存时返回 null（流媒体键不含音质，不参与复用）
+ */
+const downloadedCacheKey = (track: Track, level: string): string | null => {
+  if (track.source === "streaming") return null;
+  if (track.source === "kugou") {
+    return track.id ? `o:kugou:${track.id}:${track.extId ?? ""}:${level}` : null;
+  }
+  if ((track.source === "netease" || track.source === "qqmusic") && track.id) {
+    return `o:${track.source}:${track.id}:${level}`;
+  }
+  return null;
+};
+
+
+/** 记录主键：在线平台用 source:id，流媒体用 serverId:originalId */
+export const downloadedKeyOf = (track: { source: string; id: string; serverId?: string; originalId?: string }): string =>
+  track.source === "streaming" && track.serverId && track.originalId
+    ? `s:${track.serverId}:${track.originalId}`
+    : `${track.source}:${track.id}`;
+
+/** 全部已下载记录（供队列构建时一次性取用） */
+export const listDownloadedRecords = async (): Promise<DownloadedRecord[]> =>
+  (await downloadDb.getItem<DownloadedRecord[]>("records")) ?? [];
+
+/** 按音质取已下载记录（精确匹配） */
+export const getDownloadedRecord = async (
+  track: { source: string; id: string; serverId?: string; originalId?: string },
+  qualityLevel: string,
+): Promise<DownloadedRecord | null> => {
+  const all = (await downloadDb.getItem<DownloadedRecord[]>("records")) ?? [];
+  const key = downloadedKeyOf(track);
+  return all.find((r) => r.key === key && r.qualityLevel === qualityLevel) ?? null;
+};
+
+/** 取该曲目任意音质的已下载记录（用于已经下载过时跳过重复下载） */
+export const getAnyDownloadedRecord = async (track: {
+  source: string;
+  id: string;
+  serverId?: string;
+  originalId?: string;
+}): Promise<DownloadedRecord | null> => {
+  const all = (await downloadDb.getItem<DownloadedRecord[]>("records")) ?? [];
+  const key = downloadedKeyOf(track);
+  return all.find((r) => r.key === key) ?? null;
+};
+
+/** 写入/覆盖一条已下载记录 */
+const saveDownloadedRecord = async (record: DownloadedRecord): Promise<void> => {
+  const all = (await downloadDb.getItem<DownloadedRecord[]>("records")) ?? [];
+  const next = all.filter((r) => !(r.key === record.key && r.qualityLevel === record.qualityLevel));
+  next.push(record);
+  await downloadDb.setItem("records", next);
+};
+
+/** 按 trackId 删除记录（下载文件被删或任务被移除时） */
+const removeDownloadedRecordById = async (trackId: string): Promise<void> => {
+  const all = (await downloadDb.getItem<DownloadedRecord[]>("records")) ?? [];
+  const next = all.filter((r) => r.trackId !== trackId);
+  await downloadDb.setItem("records", next);
+};
+
 class AndroidDownloadManager {
   private tasks: DownloadTask[] = [];
   private requests = new Map<string, DownloadRequest>();
@@ -1322,6 +1401,31 @@ class AndroidDownloadManager {
     if (!task) return;
     Object.assign(task, update);
     this.stateListeners.forEach((listener) => listener({ ...task }));
+  }
+
+  /**
+   * 无 URL 后缀时按文件头嗅探真实音频格式
+   * @param url - 音频直链
+   * @returns 扩展名；无法判断返回空串
+   */
+  private async sniffFormat(url: string): Promise<string> {
+    try {
+      const { head } = await getAndroidDownload().sniffAudioHead({ url, maxBytes: 12 });
+      if (!head) return "";
+      const bytes = atob(head);
+      const at = (i: number): number => bytes.charCodeAt(i);
+      if (bytes.startsWith("fLaC")) return "flac";
+      if (bytes.startsWith("OggS")) return "ogg";
+      if (bytes.startsWith("RIFF") && bytes.slice(8, 12) === "WAVE") return "wav";
+      if (bytes.startsWith("ID3")) return "mp3";
+      // ISO-BMFF: 偏移 4 起为 "ftyp"
+      if (at(4) === 0x66 && at(5) === 0x74 && at(6) === 0x79 && at(7) === 0x70) return "m4a";
+      if (at(0) === 0xff && (at(1) & 0xe0) === 0xe0) return "mp3";
+      return "";
+    } catch (err) {
+      console.warn("[AndroidDownloadManager] 格式嗅探失败", err);
+      return "";
+    }
   }
 
   private sanitizeFilename(name: string): string {
@@ -1403,6 +1507,22 @@ class AndroidDownloadManager {
       let downloadUrl = req.url;
       let format = req.declaredFormat;
       let size = req.declaredSize;
+      /** 命中的播放缓存绝对路径（同音质），命中则直接搬运，不再联网 */
+      let cacheFilePath: string | undefined;
+
+      // 已有同音质播放缓存 → 直接搬运缓存文件，避免重复下载
+      const cacheKey = downloadedCacheKey(req.track, String(nextTask.qualityLevel));
+      if (cacheKey) {
+        try {
+          const cached = await bridge.cache.song.lookup(cacheKey);
+          if (cached) {
+            cacheFilePath = cached;
+            console.log("[AndroidDownloadManager] 复用播放缓存", cacheKey, cached);
+          }
+        } catch (err) {
+          console.warn("[AndroidDownloadManager] 缓存查询失败", err);
+        }
+      }
 
       // 如果请求未预解析 URL（或者来源为 netease 且未标记已解析），使用 Kotlin 端解析
       if (!downloadUrl && req.track.source === "netease" && isAndroidNative) {
@@ -1430,7 +1550,7 @@ class AndroidDownloadManager {
         }
       }
 
-      if (!downloadUrl) {
+      if (!downloadUrl && !cacheFilePath) {
         console.warn("[AndroidDownloadManager] No URL available for track", req.track.id);
         throw new Error("NO_URL_AVAILABLE");
       }
@@ -1440,15 +1560,18 @@ class AndroidDownloadManager {
       const baseName = `${artistNames} - ${track.title}`;
       const safeBaseName = this.sanitizeFilename(baseName);
 
-      const extMatch = downloadUrl.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
-      const ext = extMatch ? extMatch[1] : format || "mp3";
+      const extMatch = downloadUrl ? downloadUrl.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/) : null;
+      let ext = extMatch ? extMatch[1] : format || "";
+      if (!ext && downloadUrl) ext = await this.sniffFormat(downloadUrl);
+      if (!ext) ext = "mp3";
       const fileName = `${safeBaseName}.${ext}`;
 
       const audioResult = await getAndroidDownload().downloadFile({
         taskId: nextTask.taskId,
-        url: downloadUrl,
+        url: downloadUrl ?? "",
         fileName,
         directoryUri: dir,
+        cacheFilePath,
       });
 
       // 内嵌标签（封面/元信息/歌词），失败仅告警不影响音频文件
@@ -1462,6 +1585,9 @@ class AndroidDownloadManager {
             title: track.title,
             artist: artistNames,
             album: track.album?.name,
+            albumArtist: track.album?.artist ?? artistNames,
+            trackNumber: track.track ? String(track.track) : "",
+            year: track.album?.year ? String(track.album.year) : "",
             lyrics: req.lyricText,
             embedCover: tagOpts.embedCover,
             embedMeta: tagOpts.embedMeta,
@@ -1501,6 +1627,17 @@ class AndroidDownloadManager {
         tagWarning: tagWarning || undefined,
         finishedAt: Date.now(),
       });
+
+      // 持久化「已下载」映射：重启后仍可优先播放本地文件，并据此跳过重复下载
+      await saveDownloadedRecord({
+        key: downloadedKeyOf(track),
+        trackId: track.id,
+        qualityLevel: String(nextTask.qualityLevel),
+        directoryUri: dir,
+        fileName,
+        filePath: audioResult.path,
+        updatedAt: Date.now(),
+      }).catch((err) => console.warn("[AndroidDownloadManager] 记录保存失败", err));
     } catch (error: any) {
       this.updateTask(nextTask.taskId, {
         status: "failed",
@@ -1517,6 +1654,37 @@ class AndroidDownloadManager {
     this.setupPluginListener();
     const existing = this.tasks.find((t) => t.taskId === req.taskId);
     if (existing) return { ok: false, reason: "queued" };
+
+    // 已下载过且文件仍在 → 直接视为完成，避免重复下载
+    const record = await getAnyDownloadedRecord(req.track);
+    if (record) {
+      const alive = await getAndroidDownload()
+        .fileExists({
+          directoryUri: record.directoryUri,
+          fileName: record.fileName,
+          subPath: record.subPath,
+        })
+        .then((res) => res.exists)
+        .catch(() => false);
+      if (alive) {
+        const done: DownloadTask = {
+          taskId: req.taskId,
+          status: "done",
+          track: req.track,
+          qualityLevel: req.qualityLevel,
+          received: req.declaredSize || 0,
+          total: req.declaredSize || 0,
+          filePath: record.filePath,
+          createdAt: Date.now(),
+          finishedAt: Date.now(),
+        };
+        this.tasks.push(done);
+        this.stateListeners.forEach((listener) => listener({ ...done }));
+        return { ok: false, reason: "downloaded" };
+      }
+      // 文件已被删除，清掉失效记录后重新下载
+      await removeDownloadedRecordById(req.track.id).catch(() => undefined);
+    }
 
     this.requests.set(req.taskId, req);
 
@@ -1577,8 +1745,14 @@ class AndroidDownloadManager {
   }
 
   public async remove(taskId: string): Promise<void> {
+    const removed = this.tasks.find((t) => t.taskId === taskId);
     this.tasks = this.tasks.filter((t) => t.taskId !== taskId);
     this.requests.delete(taskId);
+    if (removed) {
+      await removeDownloadedRecordById(removed.track.id).catch((err) =>
+        console.warn("[AndroidDownloadManager] 记录清理失败", err),
+      );
+    }
   }
 
   public async clearFinished(): Promise<void> {

@@ -46,6 +46,9 @@ class PlaybackQueue {
     var source: String = ""
     var sourceId: String = ""
     var path: String? = null
+
+    /** 已下载文件的 content:// URI；优先于缓存与在线解析使用 */
+    var downloadPath: String? = null
     var serverId: String? = null
     var originalId: String? = null
     var albumId: String? = null

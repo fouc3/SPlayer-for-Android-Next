@@ -136,6 +136,8 @@ class AndroidMediaSessionManager(
       track.source = safeOptString(obj, "source", safeOptString(rawTrack, "source"))
       track.sourceId = safeOptString(obj, "sourceId", safeOptString(rawTrack, "id"))
       track.path = readNullableString(obj, "path") ?: readNullableString(rawTrack, "path")
+      track.downloadPath =
+        readNullableString(obj, "downloadPath") ?: readNullableString(rawTrack, "downloadPath")
       track.serverId = readNullableString(obj, "serverId") ?: readNullableString(rawTrack, "serverId")
       track.originalId = readNullableString(obj, "originalId") ?: readNullableString(rawTrack, "originalId")
       track.albumId = readNullableString(rawTrack.optJSONObject("album"), "id")
@@ -157,6 +159,7 @@ class AndroidMediaSessionManager(
     track.source = safeOptString(obj, "source")
     track.sourceId = safeOptString(obj, "sourceId", safeOptString(obj, "songId"))
     track.path = readNullableString(obj, "path")
+    track.downloadPath = readNullableString(obj, "downloadPath")
     track.serverId = readNullableString(obj, "serverId")
     track.originalId = readNullableString(obj, "originalId")
     track.albumId = readNullableString(obj, "albumId")

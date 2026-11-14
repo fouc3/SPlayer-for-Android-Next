@@ -124,6 +124,10 @@ const removeSplash = (): void => {
  */
 const bootstrapPlayback = async (): Promise<void> => {
   await initPlayer();
+  // 词幕状态栏歌词：若设置已开启，启动即注册 Provider 并推送当前歌词
+  void import("@/services/lyriconProvider")
+    .then((m) => m.startLyriconPush())
+    .catch((err) => console.warn("[lyricon] 初始化失败", err));
 
   const pendingAudioFiles = await window.api.system.consumePendingAudioFiles();
   const pendingOrpheusUrl = await window.api.system.consumePendingProtocolUrl();

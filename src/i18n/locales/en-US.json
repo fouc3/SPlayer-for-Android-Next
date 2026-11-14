@@ -1305,6 +1305,10 @@
       "label": "Word Highlight",
       "description": "Show word-by-word lyric highlight progress"
     },
+    "androidStatusBarLyric": {
+      "label": "Lyricon Status Bar Lyrics",
+      "description": "Push word-by-word lyrics to Lyricon for display in the system status bar; requires Lyricon installed with System UI scope enabled"
+    },
     "androidLyricUnlockFpsLimit": {
       "label": "Unlock Lyric FPS Limit",
       "description": "Unlocks the frame rate limit, but only effective on some devices"

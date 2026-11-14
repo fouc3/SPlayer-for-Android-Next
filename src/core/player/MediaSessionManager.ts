@@ -12,7 +12,11 @@ import * as lyricLoader from "@/services/lyric/loader";
 import { songsByIds } from "@/apis/song/netease";
 import * as fm from "./fm";
 import { EMBEDDED_API_ORIGIN } from "@/utils/embeddedApi";
-import bridge, { isAndroidNative } from "@/services/bridge";
+import bridge, {
+  isAndroidNative,
+  downloadedKeyOf,
+  listDownloadedRecords,
+} from "@/services/bridge";
 import { isLanSyncReceiver } from "@/composables/useLanSyncRole";
 import { isApplyingRemoteState } from "@/composables/lanSyncRemote";
 
@@ -85,6 +89,8 @@ interface AndroidNativeQueueTrack {
   source: Track["source"];
   sourceId: string;
   path?: string;
+  /** 已下载文件的 content:// URI（存在则原生优先播放它） */
+  downloadPath?: string;
   serverId?: string;
   originalId?: string;
   liked: boolean;
@@ -150,8 +156,20 @@ class MediaSessionManager {
       );
     }
 
+    // 先载入已下载记录快照，保证首次推送就带上 downloadPath（本地优先播放）
+    void this.refreshDownloadedSnapshot()
+      .then(() => this.scheduleQueuePush())
+      .catch(() => undefined);
+
     // 同步 API 上下文
     void this.syncAndroidApiContext();
+  }
+
+  /** 下载任务落盘后刷新快照并重推队列，使「下载后优先播放下载文件」立即生效 */
+  public async refreshDownloadedTracks(): Promise<void> {
+    if (!isAndroidNative) return;
+    await this.refreshDownloadedSnapshot();
+    this.scheduleQueuePush();
   }
 
   /** 清理事件订阅 */
@@ -334,6 +352,35 @@ class MediaSessionManager {
   }
 
   /** 构建全量队列 payload（FM 模式推 FM 池，当前曲恒在队头） */
+  /** 已下载记录快照（key → 记录），随队列推送一起刷新 */
+  private downloadedSnapshot = new Map<string, { filePath: string; qualityLevel: string }>();
+
+  /** 待执行的快照刷新（并发调用合并） */
+  private downloadedRefresh: Promise<void> | null = null;
+
+  /**
+   * 刷新已下载记录快照
+   * 记录来自 localforage，异步读取；读完后由调用方重新推送队列
+   */
+  private async refreshDownloadedSnapshot(): Promise<void> {
+    if (this.downloadedRefresh) return this.downloadedRefresh;
+    this.downloadedRefresh = (async () => {
+      try {
+        const records = await listDownloadedRecords();
+        const next = new Map<string, { filePath: string; qualityLevel: string }>();
+        for (const record of records) {
+          next.set(record.key, { filePath: record.filePath, qualityLevel: record.qualityLevel });
+        }
+        this.downloadedSnapshot = next;
+      } catch (error) {
+        console.warn("[MediaSession] 读取已下载记录失败:", error);
+      } finally {
+        this.downloadedRefresh = null;
+      }
+    })();
+    return this.downloadedRefresh;
+  }
+
   private buildAndroidQueueTracks(): {
     tracks: AndroidNativeQueueTrack[];
     currentIndex: number;
@@ -369,12 +416,14 @@ class MediaSessionManager {
       const isLiked = userStore.likedSongIds.has(t.id);
       const knownUrl =
         isCurrent && currentSource ? currentSource : t.source === "local" ? t.path : null;
+      const downloaded = t.source === "local" ? undefined : this.downloadedSnapshot.get(downloadedKeyOf(t));
 
       tracks.push({
         track: t,
         source: t.source,
         sourceId: t.id,
         path: t.path,
+        downloadPath: downloaded?.filePath,
         serverId: t.serverId,
         originalId: t.originalId,
         liked: isLiked,

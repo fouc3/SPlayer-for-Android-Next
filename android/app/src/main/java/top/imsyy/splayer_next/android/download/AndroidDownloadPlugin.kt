@@ -126,8 +126,10 @@ class AndroidDownloadPlugin : Plugin() {
     val fileName = call.getString("fileName", "") ?: ""
     val directoryUri = call.getString("directoryUri", "") ?: ""
     val subPath = call.getString("subPath", "") ?: ""
+    // 已有同音质播放缓存时由 JS 传入的本地绝对路径：命中则直接复制，不走网络
+    val cacheFilePath = call.getString("cacheFilePath", "") ?: ""
 
-    if (fileUrl.isEmpty() || fileName.isEmpty() || directoryUri.isEmpty()) {
+    if ((fileUrl.isEmpty() && cacheFilePath.isEmpty()) || fileName.isEmpty() || directoryUri.isEmpty()) {
       call.reject("url, fileName, and directoryUri are required")
       return
     }
@@ -198,6 +200,82 @@ class AndroidDownloadPlugin : Plugin() {
         var input: InputStream? = null
         var output: OutputStream? = null
         try {
+          // 命中播放缓存：直接复制本地文件，省去一次网络下载
+          val cacheFile = if (cacheFilePath.isNotEmpty()) File(cacheFilePath) else null
+          if (cacheFile != null && cacheFile.exists() && cacheFile.length() > 0) {
+            Log.i("AndroidDownload", "复用播放缓存: $cacheFilePath -> $fileName")
+            input = FileInputStream(cacheFile)
+            output = context.contentResolver.openOutputStream(targetFile.uri)
+            if (output == null) {
+              targetFile.delete()
+              call.reject("FAILED_TO_OPEN_OUTPUT_STREAM")
+              return@execute
+            }
+            val cacheBuffer = ByteArray(64 * 1024)
+            var cacheRead: Int
+            var cacheTotal: Long = 0
+            val cacheLength = cacheFile.length()
+            var cacheLastPercent = -1
+            while (input.read(cacheBuffer).also { cacheRead = it } != -1) {
+              if (taskId.isNotEmpty() && cancelledTasks.contains(taskId)) {
+                throw Exception("DOWNLOAD_CANCELLED")
+              }
+              output.write(cacheBuffer, 0, cacheRead)
+              cacheTotal += cacheRead
+              val cachePercent = ((cacheTotal * 100) / cacheLength).toInt()
+              if (cachePercent != cacheLastPercent && cachePercent % 5 == 0) {
+                cacheLastPercent = cachePercent
+                val progress = JSObject()
+                progress.put("taskId", taskId)
+                progress.put("bytesRead", cacheTotal)
+                progress.put("contentLength", cacheLength)
+                progress.put("percent", cachePercent / 100.0)
+                notifyListeners("downloadProgress", progress)
+              }
+            }
+            output.flush()
+            try {
+              output.close()
+            } catch (ignored: IOException) {
+            }
+            output = null
+            input = null
+
+            val finalFile = targetDir.createFile(mimeType, fileName)
+            if (finalFile == null) {
+              targetFile.delete()
+              call.reject("FAILED_TO_RENAME_FILE")
+              return@execute
+            }
+            var renameOutput: OutputStream? = null
+            var tempInput: InputStream? = null
+            try {
+              tempInput = context.contentResolver.openInputStream(targetFile.uri)
+              renameOutput = context.contentResolver.openOutputStream(finalFile.uri)
+              if (tempInput != null && renameOutput != null) {
+                tempInput.copyTo(renameOutput)
+              }
+            } finally {
+              try {
+                tempInput?.close()
+              } catch (ignored: IOException) {
+              }
+              try {
+                renameOutput?.close()
+              } catch (ignored: IOException) {
+              }
+              targetFile.delete()
+            }
+
+            val result = JSObject()
+            result.put("status", "success")
+            result.put("path", finalFile.uri.toString())
+            result.put("fileName", fileName)
+            result.put("fromCache", true)
+            call.resolve(result)
+            return@execute
+          }
+
           val url = URL(fileUrl)
           connection = url.openConnection() as HttpURLConnection
           connection.connectTimeout = 30000
@@ -521,6 +599,97 @@ class AndroidDownloadPlugin : Plugin() {
       val result = JSObject()
       result.put("exists", false)
       call.resolve(result)
+    }
+  }
+
+  /**
+   * 查询下载目录中指定文件是否仍存在（供 JS 恢复下载记录后过滤已删文件）。
+   */
+  @PluginMethod
+  fun fileExists(call: PluginCall) {
+    val directoryUri = call.getString("directoryUri", "") ?: ""
+    val fileName = call.getString("fileName", "") ?: ""
+    val subPath = call.getString("subPath", "") ?: ""
+    if (directoryUri.isEmpty() || fileName.isEmpty()) {
+      val result = JSObject()
+      result.put("exists", false)
+      call.resolve(result)
+      return
+    }
+
+    try {
+      val directory = DocumentFile.fromTreeUri(context, Uri.parse(directoryUri))
+      if (directory == null || !directory.exists()) {
+        val result = JSObject()
+        result.put("exists", false)
+        call.resolve(result)
+        return
+      }
+      var targetDir: DocumentFile = directory
+      if (subPath.isNotEmpty()) {
+        for (part in subPath.split("/")) {
+          if (part.isEmpty()) continue
+          val child = findChild(targetDir, part) ?: break
+          if (!child.isDirectory) break
+          targetDir = child
+        }
+      }
+      val file = findChild(targetDir, fileName)
+      val result = JSObject()
+      result.put("exists", file != null && file.exists())
+      result.put("path", if (file != null) file.uri.toString() else "")
+      call.resolve(result)
+    } catch (error: Exception) {
+      val result = JSObject()
+      result.put("exists", false)
+      call.resolve(result)
+    }
+  }
+
+  /**
+   * 读取文件头部字节数（base64），用于在无法由 URL 判断时嗅探真实音频格式。
+   */
+  @PluginMethod
+  fun sniffAudioHead(call: PluginCall) {
+    val fileUrl = call.getString("url", "") ?: ""
+    val maxBytes = (call.getInt("maxBytes", 12) ?: 12).coerceIn(4, 64)
+    if (fileUrl.isEmpty()) {
+      call.reject("url is required")
+      return
+    }
+
+    var connection: HttpURLConnection? = null
+    var input: InputStream? = null
+    try {
+      connection = URL(fileUrl).openConnection() as HttpURLConnection
+      connection.connectTimeout = 8000
+      connection.readTimeout = 8000
+      connection.setRequestProperty("User-Agent", "SPlayer-for-Android")
+      connection.setRequestProperty("Range", "bytes=0-${maxBytes - 1}")
+      connection.connect()
+      val code = connection.responseCode
+      if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) {
+        call.resolve(JSObject().apply { put("head", "") })
+        return
+      }
+      input = connection.inputStream
+      val buf = ByteArray(maxBytes)
+      var read = 0
+      while (read < maxBytes) {
+        val n = input.read(buf, read, maxBytes - read)
+        if (n <= 0) break
+        read += n
+      }
+      val head = if (read > 0) Base64.encodeToString(buf.copyOf(read), Base64.NO_WRAP) else ""
+      call.resolve(JSObject().apply { put("head", head) })
+    } catch (error: Exception) {
+      call.resolve(JSObject().apply { put("head", "") })
+    } finally {
+      try {
+        input?.close()
+      } catch (ignored: IOException) {
+      }
+      connection?.disconnect()
     }
   }
 
@@ -948,6 +1117,10 @@ class AndroidDownloadPlugin : Plugin() {
     val title = call.getString("title", "") ?: ""
     val artist = call.getString("artist", "") ?: ""
     val album = call.getString("album", "") ?: ""
+    val albumArtist = call.getString("albumArtist", "") ?: ""
+    val trackNo = call.getString("trackNumber", "") ?: ""
+    val discNo = call.getString("discNumber", "") ?: ""
+    val year = call.getString("year", "") ?: ""
     val lyrics = call.getString("lyrics", "") ?: ""
     val embedCover = call.getBoolean("embedCover", false) ?: false
     val embedMeta = call.getBoolean("embedMeta", false) ?: false
@@ -990,6 +1163,10 @@ class AndroidDownloadPlugin : Plugin() {
           if (title.isNotEmpty()) tag.setField(FieldKey.TITLE, title)
           if (artist.isNotEmpty()) tag.setField(FieldKey.ARTIST, artist)
           if (album.isNotEmpty()) tag.setField(FieldKey.ALBUM, album)
+          if (albumArtist.isNotEmpty()) tag.setField(FieldKey.ALBUM_ARTIST, albumArtist)
+          if (trackNo.isNotEmpty()) tag.setField(FieldKey.TRACK, trackNo)
+          if (discNo.isNotEmpty()) tag.setField(FieldKey.DISC_NO, discNo)
+          if (year.isNotEmpty()) tag.setField(FieldKey.YEAR, year)
         }
         if (embedLyric && lyrics.isNotEmpty()) {
           tag.setField(FieldKey.LYRICS, lyrics)
