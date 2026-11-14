@@ -1020,6 +1020,12 @@ class PlaybackManager private constructor(
     updateNotification()
   }
 
+  /**
+   * 对外暴露当前是否正在出声（词幕状态栏歌词等外部消费者使用）
+   * 与内部判定同源，避免各处自行猜测播放状态
+   */
+  fun isPlayingForExternal(): Boolean = isEffectivelyPlaying()
+
   private fun isEffectivelyPlaying(): Boolean {
     if (remoteMode) return remoteIsPlaying
     if (!onPlaybackLooper()) return cachedIsPlaying

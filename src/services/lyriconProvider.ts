@@ -12,6 +12,7 @@ import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { AndroidLyricon } from "@/plugins/androidLyricon";
 import * as playback from "@/services/playback";
+import { toast } from "@/composables/useToast";
 
 /** 是否已成功注册 Provider */
 let registered = false;
@@ -139,11 +140,12 @@ const installWatchers = (): void => {
   };
 };
 
-/** 启动：注册并按需推送一次 */
+/** 启动：先注册 Provider（无论开关是否开启，便于日志确认链路），再按开关推送 */
 export const startLyriconPush = async (): Promise<void> => {
-  if (!isEnabled()) return;
+  if (!isAndroidNative) return;
   const ok = await ensureRegistered();
-  if (!ok) return;
+  console.info(`[lyricon] provider registered=${ok} enabled=${isEnabled()}`);
+  if (!ok || !isEnabled()) return;
   installWatchers();
   resetCache();
   await pushSong(true);
@@ -166,15 +168,39 @@ export const stopLyriconPush = async (): Promise<void> => {
   resetCache();
 };
 
-/** 设置开关变化时重新评估 */
+/**
+ * 设置开关变化时重新评估
+ * 开关打开时给出可见反馈（无需 adb 也能确认 Provider 是否注册成功）
+ */
 export const syncLyriconSetting = async (): Promise<void> => {
-  if (isEnabled()) await startLyriconPush();
-  else await stopLyriconPush();
+  if (!isEnabled()) {
+    await stopLyriconPush();
+    return;
+  }
+  await startLyriconPush();
+  if (!registered) {
+    toast.warning("词幕未就绪：请确认已安装词幕并在 LSPosed 中启用");
+    return;
+  }
+  toast.info("已接入词幕，播放时状态栏会显示歌词");
 };
 
 /** 播放进度/状态变化的高频入口（内部节流） */
 export const tickLyriconPush = (): void => {
-  if (!registered) return;
+  // 开关开着却没注册成功（例如启动时词幕还没就绪）→ 每 2s 尝试补注册
+  if (!registered) {
+    if (isEnabled() && Date.now() - lastSongAttemptAt > 2000) {
+      lastSongAttemptAt = Date.now();
+      void ensureRegistered().then((ok) => {
+        if (ok) {
+          installWatchers();
+          resetCache();
+          void pushSong(true);
+        }
+      });
+    }
+    return;
+  }
   // 歌词还没成功送达（Provider 刚注册、中心服务还没连上）时按 2s 节流重试
   if (!songPushed && Date.now() - lastSongAttemptAt > 2000) {
     void pushSong(true);

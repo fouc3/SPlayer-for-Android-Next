@@ -31,6 +31,9 @@ object LyriconBridge {
   val isAvailable: Boolean
     get() = provider != null
 
+  /** 取当前 Provider 实例（未注册时为 null） */
+  fun providerOrNull(): LyriconProvider? = provider
+
   /**
    * 创建并注册 Provider（幂等）
    * @param context - 应用上下文

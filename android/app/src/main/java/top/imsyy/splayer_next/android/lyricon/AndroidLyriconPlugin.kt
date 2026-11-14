@@ -14,10 +14,13 @@ import com.getcapacitor.annotation.CapacitorPlugin
  */
 @CapacitorPlugin(name = "AndroidLyricon")
 class AndroidLyriconPlugin : Plugin() {
-  /** 启用并注册 Provider */
+  /** 启用并注册 Provider，注册成功后启动原生进度同步 */
   @PluginMethod
   fun enable(call: PluginCall) {
     val available = LyriconBridge.ensureRegistered(context)
+    if (available) {
+      LyriconBridge.providerOrNull()?.let { LyriconPositionTicker.start(context, it) }
+    }
     val res = JSObject()
     res.put("available", available)
     call.resolve(res)
@@ -26,6 +29,7 @@ class AndroidLyriconPlugin : Plugin() {
   /** 关闭并释放 Provider */
   @PluginMethod
   fun disable(call: PluginCall) {
+    LyriconPositionTicker.stop()
     LyriconBridge.release()
     call.resolve()
   }
