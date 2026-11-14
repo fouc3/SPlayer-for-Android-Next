@@ -136,6 +136,8 @@ export interface AndroidDownloadPlugin {
     fileName: string;
     subPath?: string;
   }): Promise<{ exists: boolean; path?: string }>;
+  /** 嗅探应用私有缓存文件的真实音频格式 */
+  sniffLocalAudio(options: { filePath: string }): Promise<{ format: string }>;
   /** 读取远程文件头部若干字节（base64），用于嗅探真实音频格式 */
   sniffAudioHead(options: { url: string; maxBytes?: number }): Promise<{ head: string }>;
   /** 列出下载目录下的全部音乐文件 */

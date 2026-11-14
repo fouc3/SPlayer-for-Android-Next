@@ -25,6 +25,7 @@ import IconCloudOff from "~icons/lucide/cloud-off";
 import IconSearch from "~icons/lucide/search";
 import IconMessageCircle from "~icons/lucide/message-circle";
 import IconMoreHorizontal from "~icons/lucide/more-horizontal";
+import IconListChecks from "~icons/lucide/list-checks";
 import IconPuzzle from "~icons/lucide/puzzle";
 
 export interface TrackMenuOptions {
@@ -48,6 +49,8 @@ export interface TrackMenuOptions {
   onDownload?: (track: Track, quality?: QualityLevel) => void;
   /** 从云盘删除回调 */
   onRemoveFromCloud?: (track: Track) => void;
+  /** 批量管理回调：提供后菜单中出现「批量管理」项，入参为命中的曲目 */
+  onBatchManage?: (track: Track) => void;
 }
 
 /**
@@ -141,10 +144,17 @@ export const useTrackMenu = (
         show: showCloudRemove,
       },
       {
+        key: "batchManage",
+        label: t("songList.batch.manage"),
+        icon: markRaw(IconListChecks),
+        separator: true,
+        show: !!options.onBatchManage,
+      },
+      {
         key: "searchSame",
         label: t("songList.context.searchSame"),
         icon: markRaw(IconSearch),
-        separator: true,
+        separator: !options.onBatchManage,
       },
       {
         key: "comments",
@@ -254,6 +264,9 @@ export const useTrackMenu = (
         break;
       case "removeFromCloud":
         options.onRemoveFromCloud?.(current);
+        break;
+      case "batchManage":
+        options.onBatchManage?.(current);
         break;
       case "searchSame":
         router.push({ path: "/search", query: { q: current.title } });

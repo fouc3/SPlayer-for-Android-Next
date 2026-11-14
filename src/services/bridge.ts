@@ -1562,6 +1562,13 @@ class AndroidDownloadManager {
 
       const extMatch = downloadUrl ? downloadUrl.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/) : null;
       let ext = extMatch ? extMatch[1] : format || "";
+      // 缓存搬运时 URL 可能为空，扩展名以缓存文件的真实文件头为准（缓存落盘一律是 .bin）
+      if (!ext && cacheFilePath) {
+        ext = await getAndroidDownload()
+          .sniffLocalAudio({ filePath: cacheFilePath })
+          .then((res) => res.format)
+          .catch(() => "");
+      }
       if (!ext && downloadUrl) ext = await this.sniffFormat(downloadUrl);
       if (!ext) ext = "mp3";
       const fileName = `${safeBaseName}.${ext}`;

@@ -8,12 +8,9 @@ const props = withDefaults(
     items: DropdownMenuItem[];
     /** 对齐方式 */
     alignOffset?: number;
-    /** 禁用右键/长按菜单（触摸长按改作多选时使用） */
-    disabled?: boolean;
   }>(),
   {
     alignOffset: 0,
-    disabled: false,
   },
 );
 
@@ -53,7 +50,7 @@ const menuItemClass =
 
 <template>
   <ContextMenuRoot @update:open="onOpenChange">
-    <ContextMenuTrigger as="div" class="contents" :disabled="disabled">
+    <ContextMenuTrigger as="div" class="contents">
       <slot />
     </ContextMenuTrigger>
 

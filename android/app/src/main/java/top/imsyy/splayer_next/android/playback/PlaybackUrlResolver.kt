@@ -1,6 +1,7 @@
 package top.imsyy.splayer_next.android.playback
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -436,8 +437,10 @@ class PlaybackUrlResolver(
     if (track == null) return null
     if (!track.url.isNullOrEmpty()) return track.url
     if (track.source == "local") return track.path
-    // 已下载文件优先：下载即缓存，命中后无需再走网络
-    if (!track.downloadPath.isNullOrEmpty()) return track.downloadPath
+    // 已下载文件优先：下载即缓存，命中后无需再走网络；
+    // 但必须先确认 URI 仍可读——文件被删除或 SAF 授权失效时不能返回死链，
+    // 否则 ExoPlayer 会直接报错导致"没声音"，应回落到缓存/在线解析。
+    track.downloadPath?.takeIf { isReadableUri(it) }?.let { return it }
     lookupSongCache(track)?.let { return it }
     val pluginSource = PLUGIN_SOURCES[track.source]
     if (track.source == "netease" && track.songId > 0) {
@@ -462,6 +465,23 @@ class PlaybackUrlResolver(
         "o:${track.source}:${track.sourceId}:"
       else -> null
     }
+
+  /**
+   * 判断已下载文件的 URI 当前是否仍可读
+   * @param uri - content:// 或 file:// 路径
+   * @returns 可读返回 true；空串、权限失效、文件已删均返回 false
+   */
+  private fun isReadableUri(uri: String): Boolean {
+    if (uri.isEmpty()) return false
+    return try {
+      appContext.contentResolver.openFileDescriptor(Uri.parse(uri), "r")?.use { descriptor ->
+        descriptor.statSize != 0L
+      } == true
+    } catch (e: Exception) {
+      Log.w(TAG, "已下载文件不可读，回落解析: $uri", e)
+      false
+    }
+  }
 
   /** 查本地歌曲缓存；未开启缓存 / 无 key / 未命中 / 内容不像音频时返回 null。 */
   private fun lookupSongCache(track: PlaybackQueue.Track): String? {

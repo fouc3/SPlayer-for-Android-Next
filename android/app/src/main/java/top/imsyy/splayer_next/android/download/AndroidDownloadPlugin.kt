@@ -647,6 +647,53 @@ class AndroidDownloadPlugin : Plugin() {
   }
 
   /**
+   * 嗅探应用私有缓存文件的真实音频格式（复制缓存前确定扩展名）
+   * 入参：filePath（应用私有目录绝对路径）
+   * 返回：format（flac/mp3/m4a/ogg/wav），无法判断返回空串
+   */
+  @PluginMethod
+  fun sniffLocalAudio(call: PluginCall) {
+    val filePath = call.getString("filePath", "") ?: ""
+    val result = JSObject()
+    result.put("format", if (filePath.isEmpty()) "" else sniffAudioFile(File(filePath)))
+    call.resolve(result)
+  }
+
+  /** 按文件头判断音频格式 */
+  private fun sniffAudioFile(file: File): String {
+    if (!file.exists() || file.length() < 12) return ""
+    return try {
+      FileInputStream(file).use { input ->
+        val head = ByteArray(12)
+        var read = 0
+        while (read < head.size) {
+          val n = input.read(head, read, head.size - read)
+          if (n <= 0) break
+          read += n
+        }
+        if (read < 4) return ""
+        val magic = String(head, 0, 4, StandardCharsets.ISO_8859_1)
+        when {
+          magic.startsWith("fLaC") -> "flac"
+          magic.startsWith("OggS") -> "ogg"
+          magic.startsWith("RIFF") && read >= 12 &&
+            String(head, 8, 4, StandardCharsets.ISO_8859_1) == "WAVE" -> "wav"
+          magic.startsWith("ID3") -> "mp3"
+          // ISO-BMFF：偏移 4 起为 ftyp
+          read >= 8 && magic.substring(0, 4).isNotEmpty() &&
+            head[4] == 'f'.code.toByte() && head[5] == 't'.code.toByte() &&
+            head[6] == 'y'.code.toByte() && head[7] == 'p'.code.toByte() -> "m4a"
+          (head[0].toInt() and 0xFF) == 0xFF && (head[1].toInt() and 0xE0) == 0xE0 -> "mp3"
+          else -> ""
+        }
+      }
+    } catch (error: Exception) {
+      Log.w("AndroidDownload", "嗅探音频格式失败: ${file.absolutePath}", error)
+      ""
+    }
+  }
+
+  /**
    * 读取文件头部字节数（base64），用于在无法由 URL 判断时嗅探真实音频格式。
    */
   @PluginMethod
