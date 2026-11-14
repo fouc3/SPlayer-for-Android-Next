@@ -21,6 +21,10 @@ let lastSongKey = "";
 let lastPlaying: boolean | null = null;
 /** 进度推送节流时间戳 */
 let lastPushAt = 0;
+/** 当前歌曲是否已成功推送到词幕（连接是异步的，未成功前需要重试） */
+let songPushed = false;
+/** 上次尝试推歌的时间戳，用于重试节流 */
+let lastSongAttemptAt = 0;
 /** store 监听清理函数 */
 let stopWatchers: (() => void) | null = null;
 
@@ -44,6 +48,8 @@ const ensureRegistered = async (): Promise<boolean> => {
 /** 清空并重置本地缓存状态 */
 const resetCache = (): void => {
   lastSongKey = "";
+  songPushed = false;
+  lastSongAttemptAt = 0;
   lastPlaying = null;
   lastPushAt = 0;
 };
@@ -73,7 +79,8 @@ const pushSong = async (force = false): Promise<void> => {
 
   const showTranslation = useSettingsStore().lyric.showTranslation === true;
   const showRoma = useSettingsStore().lyric.showRomanization === true;
-  await AndroidLyricon.pushSong({
+  lastSongAttemptAt = Date.now();
+  const res = await AndroidLyricon.pushSong({
     linesJson: JSON.stringify(lines as LyricLine[]),
     songId: track.id,
     name: track.title,
@@ -84,7 +91,13 @@ const pushSong = async (force = false): Promise<void> => {
     durationMs: Math.round(track.duration ?? 0),
     showTranslation,
     showRoma,
-  }).catch((error) => console.warn("[lyricon] 推送歌词失败", error));
+  }).catch((error) => {
+    console.warn("[lyricon] 推送歌词失败", error);
+    return { ok: false };
+  });
+  // 只有真正送达才算成功；中心服务连接是异步的，未连上时下次 tick 会重试
+  songPushed = res?.ok === true;
+  if (!songPushed) lastSongKey = "";
 };
 
 /** 推送播放状态与进度（带节流，播放中约 4Hz） */
@@ -162,6 +175,10 @@ export const syncLyriconSetting = async (): Promise<void> => {
 /** 播放进度/状态变化的高频入口（内部节流） */
 export const tickLyriconPush = (): void => {
   if (!registered) return;
+  // 歌词还没成功送达（Provider 刚注册、中心服务还没连上）时按 2s 节流重试
+  if (!songPushed && Date.now() - lastSongAttemptAt > 2000) {
+    void pushSong(true);
+  }
   void pushState(false);
 };
 

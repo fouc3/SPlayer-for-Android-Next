@@ -42,7 +42,25 @@ object LyriconBridge {
     return try {
       val created = LyriconFactory.createProvider(context)
       provider = created
-      created.register()
+      created.service.addConnectionListener(
+        io.github.proify.lyricon.provider.service.buildConnectionListener {
+          onConnected {
+            Log.i(TAG, "已连接词幕中心服务")
+          }
+          onReconnected {
+            Log.i(TAG, "已重连词幕中心服务")
+          }
+          onDisconnected {
+            Log.w(TAG, "与词幕中心服务断开")
+          }
+          onConnectTimeout {
+            Log.w(TAG, "连接词幕中心服务超时（词幕未安装/未启用？）")
+          }
+        },
+      )
+      val ok = created.register()
+      Log.i(TAG, "register ok=$ok pkg=${context.packageName}")
+      ok
     } catch (error: Throwable) {
       // Lyricon 未安装或版本不匹配时仅记录，不抛出，避免拖垮播放器
       Log.w(TAG, "创建 Lyricon Provider 失败", error)
@@ -100,6 +118,7 @@ object LyriconBridge {
           lyrics = lines,
         )
       val ok = current.player.setSong(song)
+      Log.i(TAG, "setSong ok=$ok id=$songId lines=${lines.size}")
       if (ok) currentSongId = songId
       // 翻译/罗马音为展示开关，只控制展示，不生成内容
       runCatching {
