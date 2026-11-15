@@ -2,6 +2,7 @@ import type { Track } from "@shared/types/player";
 import { useUserStore } from "@/stores/user";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
+import * as queue from "@/stores/queue";
 import { fetchHeartModeList } from "@/apis/recommend/netease";
 import { toast } from "@/composables/useToast";
 import * as player from "@/core/player";
@@ -24,8 +25,12 @@ export const useHeartMode = () => {
    */
   const enterHeartMode = async (seed?: Track): Promise<void> => {
     if (status.heartMode) {
-      // 标记可能与实际队列脱节（例如队列被歌单/搜索页换掉但标记没清），
-      // 此处不再一味拦截：先让用户明确退出，再继续走进入流程
+      // 标记与队列仍然匹配 → 确实已在心动模式，直接提示即可；
+      // 代际不符说明标记已脱节（队列被换过），此时清掉脏标记继续进入，不能把人挡在门外
+      if (status.heartModeGeneration === queue.queueGeneration.value) {
+        toast.info(t("player.heartMode.already"));
+        return;
+      }
       player.exitHeartMode();
     }
     if (!user.isLoggedIn) {

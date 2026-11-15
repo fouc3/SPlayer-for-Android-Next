@@ -34,6 +34,13 @@ export const queue = computed<Track[]>(() => queueEntries.value.map((item) => it
 /** 原始队列顺序备份 */
 export const originalQueue = shallowRef<PlaybackQueueItem[] | null>(null);
 
+/**
+ * 队列代际：每替换一次队列自增，随队列一起持久化。
+ * 供「当前队列属于某特殊模式」这类跨存储的标记做一致性校验
+ * （心动模式标记存 status store，队列存本 store，两边分开持久化）。
+ */
+export const queueGeneration = ref(0);
+
 /** 队列中的歌曲总数 */
 export const queueLength = computed(() => queue.value.length);
 
@@ -44,16 +51,20 @@ const normalizeTracks = (items: readonly Track[] | null | undefined): Track[] =>
 const save = (): void => {
   db.setItem("playList", toRaw(queueEntries.value)).catch(console.error);
   db.setItem("originalPlayList", toRaw(originalQueue.value)).catch(console.error);
+  db.setItem("queueGeneration", queueGeneration.value).catch(console.error);
 };
 
 /** 恢复播放列表数据 */
 export const restoreQueue = async (): Promise<void> => {
   try {
-    const [list, original] = await Promise.all([
+    const [list, original, generation] = await Promise.all([
       db.getItem<PersistedQueueItem[]>("playList"),
       db.getItem<PersistedQueueItem[] | null>("originalPlayList"),
+      db.getItem<number>("queueGeneration"),
     ]);
     if (!list?.length) return;
+    // 旧版本没有代际字段，恢复成 0（此时无法做模式校验，由调用方按宽松策略处理）
+    queueGeneration.value = typeof generation === "number" ? generation : 0;
     const restoreEntries = (items: PersistedQueueItem[]): PlaybackQueueItem[] =>
       items.map((value) => {
         const item = restoreQueueItem(value);
@@ -74,6 +85,7 @@ export const restoreQueue = async (): Promise<void> => {
 export const setQueue = (items: readonly Track[], context?: PlaybackContext): void => {
   queueEntries.value = normalizeTracks(items).map((track) => createQueueItem(track, context));
   originalQueue.value = null;
+  queueGeneration.value += 1;
   save();
 };
 
@@ -226,6 +238,7 @@ export const moveInQueue = (fromIndex: number, toIndex: number): void => {
 export const clearQueue = (): void => {
   queueEntries.value = [];
   originalQueue.value = null;
+  queueGeneration.value += 1;
   save();
 };
 

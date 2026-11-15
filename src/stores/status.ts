@@ -59,6 +59,11 @@ export const useStatusStore = defineStore(
     const shuffleMode = ref<ShuffleMode>("off");
     /** 心动模式 */
     const heartMode = ref(false);
+    /**
+     * 心动模式建立时所对应的队列代际（queue.queueGeneration）
+     * 用于启动时校验：标记与队列仍然匹配才保留，否则视为脱节并清掉
+     */
+    const heartModeGeneration = ref(0);
     /** 私人 FM 模式 */
     const fmMode = ref(false);
     /** 私人 FM 选项偏好 */
@@ -146,6 +151,7 @@ export const useStatusStore = defineStore(
       repeatMode,
       shuffleMode,
       heartMode,
+      heartModeGeneration,
       fmMode,
       fmOptions,
       speed,
@@ -173,6 +179,7 @@ export const useStatusStore = defineStore(
         "repeatMode",
         "shuffleMode",
         "heartMode",
+        "heartModeGeneration",
         "fmOptions",
         "volume",
         "position",

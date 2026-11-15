@@ -21,6 +21,7 @@ import {
   originalQueue,
   queue,
   queueEntries,
+  queueGeneration,
   removeFromQueue,
   restoreQueue,
   setQueue,
@@ -67,7 +68,15 @@ describe("queue", () => {
 
     expect(queue.value.map(({ id }) => id)).toEqual(["a", "b"]);
     expect(originalQueue.value).toBeNull();
-    expect(storage.setItem).toHaveBeenCalledTimes(2);
+    // 队列项、洗牌备份、代际三份数据各写一次
+    expect(storage.setItem).toHaveBeenCalledTimes(3);
+  });
+
+  it("替换队列时递增代际并一并持久化", () => {
+    const before = queueGeneration.value;
+    setQueue([track("a")]);
+    expect(queueGeneration.value).toBe(before + 1);
+    expect(storage.setItem).toHaveBeenCalledWith("queueGeneration", before + 1);
   });
 
   it("插入位置会限制在队列边界并同步洗牌备份", () => {

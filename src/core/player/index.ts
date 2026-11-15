@@ -801,6 +801,8 @@ export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => 
   status.playIndex = 0;
   status.shuffleMode = "off";
   status.heartMode = true;
+  // 记住本模式队列的代际，启动时据此判断标记是否仍然有效
+  status.heartModeGeneration = queue.queueGeneration.value;
   // 心动 / FM 互斥
   status.fmMode = false;
   syncPlayMode();
@@ -810,6 +812,33 @@ export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => 
 /** 退出心动模式，保留当前队列继续播放 */
 export const exitHeartMode = (): void => {
   useStatusStore().heartMode = false;
+};
+
+/**
+ * 校正持久化的心动模式标记
+ *
+ * heartMode 存在 status store（localStorage），播放队列存在 localforage，两份数据分开持久化。
+ * 只要队列被换过而标记没被清掉（例如上次从心动模式里换歌单后没退出就退出了应用），
+ * 标记就会与实际队列脱节：入口一直提示「已处于心动模式」，界面显示的却是普通播放列表。
+ *
+ * 这里按「代际」温和判断而不是一律重置：
+ * - 标记未开启 → 无事可做
+ * - 记录代际 == 当前队列代际 → 队列就是心动模式那份，标记有效，保留（重启后入口仍显示为已开启）
+ * - 记录代际 == 0（旧版本升级上来的数据，还没有代际字段）→ 无从校验，
+ *   就地认领当前队列代际并保留标记，避免升级把用户的心动模式状态吃掉
+ * - 代际不等 → 队列已被换过，标记确实脱节，清掉
+ */
+const reconcileHeartModeOnStartup = (): void => {
+  const status = useStatusStore();
+  if (!status.heartMode) return;
+  if (status.heartModeGeneration === queue.queueGeneration.value) return;
+  if (status.heartModeGeneration === 0) {
+    // 旧数据：无法校验，认领当前队列并保留标记
+    status.heartModeGeneration = queue.queueGeneration.value;
+    return;
+  }
+  console.warn("[heartMode] 标记与队列不一致，自动退出心动模式");
+  status.heartMode = false;
 };
 
 /**
@@ -1200,9 +1229,8 @@ export const initPlayer = async (): Promise<void> => {
   void usePluginsStore().load();
   await queue.restoreQueue();
   const status = useStatusStore();
-  // 心动模式标记与恢复出来的队列可能脱节（两份持久化数据分开存），启动时校正一次，
-  // 否则入口会一直提示「已处于心动模式」
-  status.heartMode = false;
+  // 心动模式标记与恢复出来的队列可能脱节（两份持久化数据分开存），启动时按代际校正
+  reconcileHeartModeOnStartup();
   // 兼容移除“不循环”前持久化的旧状态
   if ((status.repeatMode as string) === "off") status.repeatMode = "list";
   // 队列恢复后预置当前曲时长：冷启动时原生还没回填首个 duration 事件，
