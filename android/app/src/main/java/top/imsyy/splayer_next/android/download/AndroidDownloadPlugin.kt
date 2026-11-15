@@ -1207,29 +1207,35 @@ class AndroidDownloadPlugin : Plugin() {
           }
         }
 
-        // JAudioTagger 写标签
-        val audioFile = AudioFileIO.read(tempFile)
+        // JAudioTagger 写标签。
+        // 注意：单个字段不受支持时 setField 会抛异常，一旦不捕获就会导致整次写入失败
+        // （表现为文件没有任何标签、没有封面），因此每个字段独立兜底。
+        val audioFile = readAudioFileByMagic(tempFile)
         val tag = audioFile.getTagOrCreateAndSetDefault()
 
         if (embedMeta) {
-          if (title.isNotEmpty()) tag.setField(FieldKey.TITLE, title)
-          if (artist.isNotEmpty()) tag.setField(FieldKey.ARTIST, artist)
-          if (album.isNotEmpty()) tag.setField(FieldKey.ALBUM, album)
-          if (albumArtist.isNotEmpty()) tag.setField(FieldKey.ALBUM_ARTIST, albumArtist)
-          if (trackNo.isNotEmpty()) tag.setField(FieldKey.TRACK, trackNo)
-          if (discNo.isNotEmpty()) tag.setField(FieldKey.DISC_NO, discNo)
-          if (year.isNotEmpty()) tag.setField(FieldKey.YEAR, year)
+          setTagFieldSafely(tag, FieldKey.TITLE, title)
+          setTagFieldSafely(tag, FieldKey.ARTIST, artist)
+          setTagFieldSafely(tag, FieldKey.ALBUM, album)
+          setTagFieldSafely(tag, FieldKey.ALBUM_ARTIST, albumArtist)
+          setTagFieldSafely(tag, FieldKey.TRACK, trackNo)
+          setTagFieldSafely(tag, FieldKey.DISC_NO, discNo)
+          setTagFieldSafely(tag, FieldKey.YEAR, year)
         }
         if (embedLyric && lyrics.isNotEmpty()) {
-          tag.setField(FieldKey.LYRICS, lyrics)
+          setTagFieldSafely(tag, FieldKey.LYRICS, lyrics)
         }
         if (coverBytes != null) {
-          tag.deleteArtworkField()
-          val artwork = AndroidArtwork()
-          artwork.setBinaryData(coverBytes)
-          artwork.setMimeType(sniffImageMime(coverBytes))
-          artwork.setPictureType(3)
-          tag.setField(artwork)
+          try {
+            tag.deleteArtworkField()
+            val artwork = AndroidArtwork()
+            artwork.setBinaryData(coverBytes)
+            artwork.setMimeType(sniffImageMime(coverBytes))
+            artwork.setPictureType(3)
+            tag.setField(artwork)
+          } catch (error: Exception) {
+            Log.w("AndroidDownload", "写入封面失败", error)
+          }
         }
 
         audioFile.commit()
@@ -1250,11 +1256,72 @@ class AndroidDownloadPlugin : Plugin() {
         result.put("status", "success")
         call.resolve(result)
       } catch (error: Exception) {
-        call.reject("EMBED_TAGS_FAILED", error)
+        Log.w("AndroidDownload", "标签写入失败: ${error.message}", error)
+        call.reject("EMBED_TAGS_FAILED: ${error.message}", error)
       } finally {
         tempFile?.delete()
       }
     }
+  }
+
+  /** 单个字段写入兜底：格式不支持该字段时只跳过，不影响其它字段 */
+  private fun setTagFieldSafely(
+    tag: org.jaudiotagger.tag.Tag,
+    key: FieldKey,
+    value: String,
+  ) {
+    if (value.isEmpty()) return
+    try {
+      tag.setField(key, value)
+    } catch (error: Exception) {
+      Log.w("AndroidDownload", "字段 $key 写入失败（已跳过）", error)
+    }
+  }
+
+  /**
+   * 按文件头魔数选择解析格式。
+   * JAudioTagger 默认按扩展名推断，SAF 场景下扩展名不可靠（临时文件、下载名与真实编码不一致），
+   * 读错解析器会直接抛异常导致标签整体写不进去。
+   */
+  private fun readAudioFileByMagic(file: File): org.jaudiotagger.audio.AudioFile {
+    val magic = ByteArray(12)
+    try {
+      FileInputStream(file).use { it.read(magic) }
+    } catch (ignored: Exception) {
+    }
+    val format = sniffAudioFormat(magic)
+    if (format != null) {
+      try {
+        return when (format) {
+          "mp3" -> org.jaudiotagger.audio.mp3.MP3File(file)
+          "flac" -> org.jaudiotagger.audio.flac.FlacFileReader().read(file)
+          "mp4" -> org.jaudiotagger.audio.mp4.Mp4FileReader().read(file)
+          "ogg" -> org.jaudiotagger.audio.ogg.OggFileReader().read(file)
+          "wav" -> org.jaudiotagger.audio.wav.WavFileReader().read(file)
+          else -> AudioFileIO.read(file)
+        }
+      } catch (error: Exception) {
+        Log.w("AndroidDownload", "按 $format 解析失败，回退自动识别", error)
+      }
+    }
+    return AudioFileIO.read(file)
+  }
+
+  /** 识别音频容器格式，返回 JAudioTagger 的 format 名 */
+  private fun sniffAudioFormat(m: ByteArray): String? {
+    fun at(i: Int): Int = if (i < m.size) m[i].toInt() and 0xFF else -1
+    // ID3 头 / MPEG 帧同步
+    if (at(0) == 'I'.code && at(1) == 'D'.code && at(2) == '3'.code) return "mp3"
+    if (at(0) == 0xFF && (at(1) and 0xE0) == 0xE0) return "mp3"
+    // fLaC
+    if (at(0) == 'f'.code && at(1) == 'L'.code && at(2) == 'a'.code && at(3) == 'C'.code) return "flac"
+    // ISO BMFF (m4a/mp4)：第 4..7 字节为 ftyp
+    if (at(4) == 'f'.code && at(5) == 't'.code && at(6) == 'y'.code && at(7) == 'p'.code) return "mp4"
+    // OggS
+    if (at(0) == 'O'.code && at(1) == 'g'.code && at(2) == 'g'.code && at(3) == 'S'.code) return "ogg"
+    // RIFF/WAVE
+    if (at(0) == 'R'.code && at(1) == 'I'.code && at(2) == 'F'.code && at(3) == 'F'.code) return "wav"
+    return null
   }
 
   /** 从 SAF 路径/文件名推断音频扩展名，供 JAudioTagger 选择解析器 */
