@@ -80,6 +80,7 @@ import top.imsyy.splayer_next.android.R
 import top.imsyy.splayer_next.android.cache.AudioCacheProvider
 import top.imsyy.splayer_next.android.cache.AudioPrefetchTtlIndex
 import top.imsyy.splayer_next.android.cache.SongCacheFetcher
+import top.imsyy.splayer_next.android.lyricon.LyriconBridge
 import top.imsyy.splayer_next.android.server.ExternalApiBroadcaster
 
 @UnstableApi
@@ -2279,6 +2280,21 @@ class PlaybackManager private constructor(
     return true
   }
 
+  /**
+   * 切歌时清掉上一首的歌词与应用侧状态。
+   *
+   * 后台自动切歌（播完续播/通知栏切歌）时 WebView 可能被系统挂起，新歌词要等 JS
+   * 恢复执行后才推上来。若不清空，灵动岛与词幕状态栏会按新歌的进度继续显示上一首的歌词。
+   * 清空的同时把新曲歌名推给灵动岛，保证这段空窗期至少曲名是对的。
+   */
+  private fun resetLyricsForNewTrack() {
+    updateDynamicIslandData("[]", "[]")
+    updateDynamicIslandSongInfo(currentMetadata.title, currentMetadata.artist)
+    if (LyriconBridge.isAvailable) {
+      LyriconBridge.clearSong()
+    }
+  }
+
   private fun trackToMetadata(track: PlaybackQueue.Track): TrackMetadata {
     val m = TrackMetadata()
     m.songId = track.songId
@@ -2319,6 +2335,7 @@ class PlaybackManager private constructor(
     clearPendingSeek()
     updateLastKnownPosition(0L)
     durationCalibratedForSource = ""
+    resetLyricsForNewTrack()
     player?.let {
       val item = buildMediaItem(source, metadata ?: TrackMetadata())
       // 下一曲已在 DefaultPreloadManager 预加载：按 URL 命中预载项并直接复用其 PreloadMediaSource。
