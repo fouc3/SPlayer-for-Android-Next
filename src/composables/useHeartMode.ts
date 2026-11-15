@@ -24,8 +24,9 @@ export const useHeartMode = () => {
    */
   const enterHeartMode = async (seed?: Track): Promise<void> => {
     if (status.heartMode) {
-      toast.info(t("player.heartMode.already"));
-      return;
+      // 标记可能与实际队列脱节（例如队列被歌单/搜索页换掉但标记没清），
+      // 此处不再一味拦截：先让用户明确退出，再继续走进入流程
+      player.exitHeartMode();
     }
     if (!user.isLoggedIn) {
       toast.warning(t("player.heartMode.needLogin"));

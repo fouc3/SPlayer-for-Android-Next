@@ -714,7 +714,8 @@ export const playFrom = async (
   if (isLanSyncReceiver() && !isApplyingRemoteState()) return;
   const status = useStatusStore();
   const media = useMediaStore();
-  // 退出特殊模?  status.heartMode = false;
+  // 退出特殊模式
+  status.heartMode = false;
   status.fmMode = false;
   const idx = Math.max(0, Math.min(startIndex, items.length - 1));
   const isSameTrack = media.track?.id === items[idx]?.id;
@@ -1199,8 +1200,25 @@ export const initPlayer = async (): Promise<void> => {
   void usePluginsStore().load();
   await queue.restoreQueue();
   const status = useStatusStore();
+  // 心动模式标记与恢复出来的队列可能脱节（两份持久化数据分开存），启动时校正一次，
+  // 否则入口会一直提示「已处于心动模式」
+  status.heartMode = false;
   // 兼容移除“不循环”前持久化的旧状态
   if ((status.repeatMode as string) === "off") status.repeatMode = "list";
+  // 队列恢复后预置当前曲时长：冷启动时原生还没回填首个 duration 事件，
+  // 不预置会让进度条/时长显示为 0，直到第一帧 position 事件才补上
+  if (status.duration <= 0) {
+    // 持久化的 playIndex 可能已越过恢复出来的队列长度，越界时回落到队头
+    const len = queue.queueLength.value;
+    if (status.playIndex < 0 || status.playIndex >= len) {
+      status.playIndex = len > 0 ? 0 : -1;
+    }
+    const restoredTrack = status.currentTrack;
+    if (restoredTrack && typeof restoredTrack.duration === "number" && restoredTrack.duration > 0) {
+      status.duration = restoredTrack.duration;
+      playback.setDuration(restoredTrack.duration);
+    }
+  }
   // 恢复上次的音量和播放模式到主进程
   await bridge.player.setVolume(status.volume);
   syncPlayMode();
