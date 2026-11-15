@@ -1181,8 +1181,11 @@ class AndroidDownloadPlugin : Plugin() {
     executor.execute {
       var tempFile: File? = null
       try {
-        // SAF → 临时文件，JAudioTagger 需要随机读写
-        tempFile = File.createTempFile("embed_", ".tmp", context.cacheDir)
+        // SAF → 临时文件，JAudioTagger 需要随机读写。
+        // 临时文件必须带真实扩展名：JAudioTagger 先按扩展名选格式解析器，
+        // 用 .tmp 会让 flac/m4a 这类格式直接判不出，导致标签（含封面）写入整体失败。
+        val ext = guessAudioExtension(filePath)
+        tempFile = File.createTempFile("embed_", ".$ext", context.cacheDir)
         context.contentResolver.openInputStream(Uri.parse(filePath)).use { input ->
           if (input == null) {
             call.reject("FAILED_TO_OPEN_SOURCE_FILE")
@@ -1199,6 +1202,8 @@ class AndroidDownloadPlugin : Plugin() {
           coverBytes = downloadCoverBytes(coverUrl)
           if (coverBytes == null) {
             Log.w("AndroidDownload", "封面下载失败，跳过封面: $coverUrl")
+          } else {
+            Log.i("AndroidDownload", "封面已获取 ${coverBytes.size} bytes: $coverUrl")
           }
         }
 
@@ -1222,7 +1227,7 @@ class AndroidDownloadPlugin : Plugin() {
           tag.deleteArtworkField()
           val artwork = AndroidArtwork()
           artwork.setBinaryData(coverBytes)
-          artwork.setMimeType("image/jpeg")
+          artwork.setMimeType(sniffImageMime(coverBytes))
           artwork.setPictureType(3)
           tag.setField(artwork)
         }
@@ -1250,6 +1255,26 @@ class AndroidDownloadPlugin : Plugin() {
         tempFile?.delete()
       }
     }
+  }
+
+  /** 从 SAF 路径/文件名推断音频扩展名，供 JAudioTagger 选择解析器 */
+  private fun guessAudioExtension(filePath: String): String {
+    val name = Uri.parse(filePath).lastPathSegment?.substringAfterLast('.', "")?.lowercase() ?: ""
+    if (name.isNotEmpty() && name.length <= 5 && name.all { it.isLetterOrDigit() }) return name
+    return "mp3"
+  }
+
+  /** 按魔数判定封面图片格式，避免一律标成 image/jpeg 导致部分播放器不识别 */
+  private fun sniffImageMime(bytes: ByteArray): String {
+    if (bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) return "image/jpeg"
+    if (bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte()) return "image/png"
+    if (bytes.size >= 12 &&
+      bytes[0] == 'R'.code.toByte() && bytes[8] == 'W'.code.toByte()
+    ) {
+      return "image/webp"
+    }
+    if (bytes.size >= 3 && bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte()) return "image/gif"
+    return "image/jpeg"
   }
 
   /** 下载封面图片字节，失败返回 null */

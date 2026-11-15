@@ -355,6 +355,11 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
       void lyricLoader.loadForTrack(null);
       extractColorFromUrl(track.cover ?? track.coverOriginal ?? null);
       void coverLoader.loadCoverForTrack(track);
+    } else {
+      // 本地曲目也在这里主动发起一次歌词加载：此前只在原生 trackChanged 回调里触发，
+      // 时机更晚且容易与切歌竞态。detail 传 null 是刻意的——
+      // TrackDetail 不带曲目标识，拿 media.detail 可能是上一首的残留。
+      void lyricLoader.loadForTrack(null);
     }
     // 换歌后 currentSource 仍是上一首的 URL 快照，必须清空：否则 buildAndroidQueueTracks
     // 会把它当作新曲的 knownUrl，导致原生直接播放上一首（点 A 播 B）

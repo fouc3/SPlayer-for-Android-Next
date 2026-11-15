@@ -286,6 +286,12 @@ class DynamicIslandService : Service() {
   ) {
     lrcLines = parseLines(lrcJson)
     yrcLines = parseLines(yrcJson)
+    // 诊断：歌词是否真的送达、解析出多少行（排查「灵动岛无歌词」时看这条）
+    Log.i(
+      TAG,
+      "pushLyrics lrcLen=${lrcJson?.length ?: 0} yrcLen=${yrcJson?.length ?: 0} " +
+        "lrcLines=${lrcLines.size} yrcLines=${yrcLines.size}",
+    )
     view?.markContentChanged()
     postRedraw()
   }
@@ -1293,8 +1299,9 @@ class DynamicIslandService : Service() {
           r.add(l)
         }
       } catch (e: Exception) {
-        Log.w(TAG, "parse", e)
+        Log.w(TAG, "parse failed len=${json.length}", e)
       }
+      android.util.Log.i(TAG, "parseLines json=${json?.length ?: 0} -> ${r.size} lines")
       return r
     }
 
