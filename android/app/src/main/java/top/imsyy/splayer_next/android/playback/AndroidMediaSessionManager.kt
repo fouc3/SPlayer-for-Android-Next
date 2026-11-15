@@ -29,6 +29,8 @@ class AndroidMediaSessionManager(
       payload.optBoolean("canSkipPrevious", true),
       payload.optBoolean("personalFmMode", false),
       payload.optBoolean("controllerEnabled", true),
+      payload.optBoolean("favoriteButtonEnabled", true),
+      payload.optBoolean("dynamicIslandButtonEnabled", true),
       payload.optBoolean("desktopLyricButtonEnabled", false),
       payload.optBoolean("desktopLyricEnabled", false),
       readQueueTracks(payload),
@@ -41,6 +43,8 @@ class AndroidMediaSessionManager(
   fun updateNotificationPrefs(payload: JSONObject) {
     playbackManager().updateNotificationPrefs(
       payload.optBoolean("controllerEnabled", true),
+      payload.optBoolean("favoriteButtonEnabled", true),
+      payload.optBoolean("dynamicIslandButtonEnabled", true),
       payload.optBoolean("desktopLyricButtonEnabled", false),
     )
   }

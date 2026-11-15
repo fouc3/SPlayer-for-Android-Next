@@ -591,6 +591,23 @@ const taskbarLyricSection: SettingSection = {
   ],
 };
 
+/**
+ * Android 词幕（Lyricon）状态栏歌词 section
+ * 把已解析的逐字歌词推给词幕，由其绘制到系统状态栏
+ */
+const androidStatusBarLyricSection: SettingSection = {
+  id: "androidStatusBarLyric",
+  platform: "android",
+  items: [
+    {
+      key: "androidStatusBarLyric",
+      type: "switch",
+      binding: { store: "settings", path: "system.androidLyric.statusBarEnabled" },
+      defaultValue: false,
+    },
+  ],
+};
+
 const inputModeSection: SettingSection = {
   id: "externalLyricInputMode",
   items: [
@@ -607,7 +624,7 @@ const externalLyricCategory: SettingCategory = {
   id: "externalLyric",
   icon: IconLucideMonitor,
   sections: isAndroid
-    ? [inputModeSection, androidDynamicIslandSection]
+    ? [inputModeSection, androidStatusBarLyricSection, androidDynamicIslandSection]
     : [
         inputModeSection,
         desktopLyricSection,

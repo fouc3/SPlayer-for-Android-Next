@@ -105,6 +105,8 @@ interface AndroidNativeQueueContextPayload {
   canSkipPrevious: boolean;
   personalFmMode: boolean;
   controllerEnabled: boolean;
+  favoriteButtonEnabled: boolean;
+  dynamicIslandButtonEnabled: boolean;
   desktopLyricButtonEnabled: boolean;
   desktopLyricEnabled: boolean;
   repeatMode: RepeatMode;
@@ -334,6 +336,8 @@ class MediaSessionManager {
         canSkipPrevious: !status.fmMode,
         personalFmMode: status.fmMode,
         controllerEnabled: settings.androidMediaControllerEnabled,
+        favoriteButtonEnabled: settings.androidMediaControllerFavoriteEnabled,
+        dynamicIslandButtonEnabled: settings.androidMediaControllerDynamicIslandEnabled,
         desktopLyricButtonEnabled: settings.androidMediaControllerDesktopLyricEnabled,
         desktopLyricEnabled: false,
         ...queueResult,
@@ -342,6 +346,8 @@ class MediaSessionManager {
         bridge.android.updateQueueContext(payload as unknown as Record<string, unknown>),
         bridge.android.updateNotificationPrefs({
           controllerEnabled: settings.androidMediaControllerEnabled,
+          favoriteButtonEnabled: settings.androidMediaControllerFavoriteEnabled,
+          dynamicIslandButtonEnabled: settings.androidMediaControllerDynamicIslandEnabled,
           desktopLyricButtonEnabled: settings.androidMediaControllerDesktopLyricEnabled,
         }),
         bridge.android.setAllowMixWithOthers(settings.androidAllowMixWithOthers),

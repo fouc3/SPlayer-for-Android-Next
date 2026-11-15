@@ -830,6 +830,7 @@
       "lyricSpring": "弹簧动画",
       "lyricLayout": "布局与透明度",
       "externalLyricInputMode": "输入方式",
+      "androidStatusBarLyric": "词幕状态栏歌词",
       "desktopLyric": "桌面歌词",
       "dynamicIsland": "灵动岛歌词",
       "taskbarLyric": "任务栏歌词",
@@ -996,6 +997,14 @@
     "androidMediaControllerEnabled": {
       "label": "通知栏媒体控制",
       "description": "在系统通知栏显示播放控制按钮"
+    },
+    "androidMediaControllerFavoriteEnabled": {
+      "label": "通知栏收藏按钮",
+      "description": "在通知栏音乐卡片左侧显示收藏按钮，可直接喜欢/取消喜欢当前歌曲"
+    },
+    "androidMediaControllerDynamicIslandEnabled": {
+      "label": "通知栏灵动岛开关",
+      "description": "在通知栏音乐卡片右侧显示灵动岛歌词开关按钮，一键开关外部歌词"
     },
     "androidAllowMixWithOthers": {
       "label": "与其他应用混播",

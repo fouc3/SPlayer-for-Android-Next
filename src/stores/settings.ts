@@ -240,6 +240,10 @@ export const useSettingsStore = defineStore(
     const androidHidePortraitNavBar = ref(true);
     /** Android：通知栏媒体控制器开关 */
     const androidMediaControllerEnabled = ref(true);
+    /** Android：通知栏收藏按钮开关（左侧自定义按钮） */
+    const androidMediaControllerFavoriteEnabled = ref(true);
+    /** Android：通知栏灵动岛歌词开关按钮（右侧自定义按钮） */
+    const androidMediaControllerDynamicIslandEnabled = ref(true);
     /** Android：通知栏桌面歌词按钮开关 */
     const androidMediaControllerDesktopLyricEnabled = ref(false);
     /** Android：允许与其他应用混播 */
@@ -491,6 +495,8 @@ export const useSettingsStore = defineStore(
       androidShowStatusBar,
       androidHidePortraitNavBar,
       androidMediaControllerEnabled,
+      androidMediaControllerFavoriteEnabled,
+      androidMediaControllerDynamicIslandEnabled,
       androidMediaControllerDesktopLyricEnabled,
       androidAllowMixWithOthers,
       isDesktopLyricOpen,

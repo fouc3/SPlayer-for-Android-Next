@@ -342,6 +342,20 @@ const playerCategory: SettingCategory = {
           defaultValue: true,
         },
         {
+          key: "androidMediaControllerFavoriteEnabled",
+          type: "switch",
+          binding: { store: "settings", path: "androidMediaControllerFavoriteEnabled" },
+          defaultValue: true,
+          visible: () => useSettingsStore().androidMediaControllerEnabled === true,
+        },
+        {
+          key: "androidMediaControllerDynamicIslandEnabled",
+          type: "switch",
+          binding: { store: "settings", path: "androidMediaControllerDynamicIslandEnabled" },
+          defaultValue: true,
+          visible: () => useSettingsStore().androidMediaControllerEnabled === true,
+        },
+        {
           key: "androidAllowMixWithOthers",
           type: "switch",
           binding: { store: "settings", path: "androidAllowMixWithOthers" },

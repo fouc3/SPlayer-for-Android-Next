@@ -296,14 +296,6 @@ const lyricCategory: SettingCategory = {
           visible: defaultLyricEngine,
         },
         {
-          // 词幕（Lyricon）状态栏歌词：把已解析歌词推给系统状态栏显示
-          key: "androidStatusBarLyric",
-          type: "switch",
-          binding: { store: "settings", path: "system.androidLyric.statusBarEnabled" },
-          defaultValue: false,
-          platform: "android",
-        },
-        {
           key: "androidLyricUnlockFpsLimit",
           type: "switch",
           binding: { store: "settings", path: "system.androidLyric.unlockFpsLimit" },

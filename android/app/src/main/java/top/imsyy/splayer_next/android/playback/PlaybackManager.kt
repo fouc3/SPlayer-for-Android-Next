@@ -196,6 +196,14 @@ class PlaybackManager private constructor(
   @Volatile
   private var controllerEnabled = true
 
+  /** 通知栏左侧自定义按钮：收藏 */
+  @Volatile
+  private var favoriteButtonEnabled = true
+
+  /** 通知栏右侧自定义按钮：灵动岛（外部歌词）开关 */
+  @Volatile
+  private var dynamicIslandButtonEnabled = true
+
   @Volatile
   private var desktopLyricButtonEnabled = false
 
@@ -848,6 +856,8 @@ class PlaybackManager private constructor(
     canSkipPreviousState: Boolean,
     personalFmModeState: Boolean,
     controllerEnabledState: Boolean,
+    favoriteButtonEnabledState: Boolean,
+    dynamicIslandButtonEnabledState: Boolean,
     desktopLyricButtonEnabledState: Boolean,
     desktopLyricEnabledState: Boolean,
     queueTracks: List<PlaybackQueue.Track>?,
@@ -860,6 +870,8 @@ class PlaybackManager private constructor(
       canSkipPreviousState,
       personalFmModeState,
       controllerEnabledState,
+      favoriteButtonEnabledState,
+      dynamicIslandButtonEnabledState,
       desktopLyricButtonEnabledState,
       desktopLyricEnabledState,
       queueTracks,
@@ -875,6 +887,8 @@ class PlaybackManager private constructor(
     canSkipPreviousState: Boolean,
     personalFmModeState: Boolean,
     controllerEnabledState: Boolean,
+    favoriteButtonEnabledState: Boolean,
+    dynamicIslandButtonEnabledState: Boolean,
     desktopLyricButtonEnabledState: Boolean,
     desktopLyricEnabledState: Boolean,
     queueTracks: List<PlaybackQueue.Track>?,
@@ -887,6 +901,8 @@ class PlaybackManager private constructor(
     canSkipPrevious = canSkipPreviousState
     personalFmMode = personalFmModeState
     controllerEnabled = controllerEnabledState
+    favoriteButtonEnabled = favoriteButtonEnabledState
+    dynamicIslandButtonEnabled = dynamicIslandButtonEnabledState
     desktopLyricButtonEnabled = desktopLyricButtonEnabledState
     desktopLyricEnabled = desktopLyricEnabledState
 
@@ -906,15 +922,28 @@ class PlaybackManager private constructor(
 
   fun updateNotificationPrefs(
     controllerEnabledState: Boolean,
+    favoriteButtonEnabledState: Boolean,
+    dynamicIslandButtonEnabledState: Boolean,
     desktopLyricButtonEnabledState: Boolean,
-  ) = onPlaybackThread { updateNotificationPrefsInternal(controllerEnabledState, desktopLyricButtonEnabledState) }
+  ) = onPlaybackThread {
+    updateNotificationPrefsInternal(
+      controllerEnabledState,
+      favoriteButtonEnabledState,
+      dynamicIslandButtonEnabledState,
+      desktopLyricButtonEnabledState,
+    )
+  }
 
   @Synchronized
   private fun updateNotificationPrefsInternal(
     controllerEnabledState: Boolean,
+    favoriteButtonEnabledState: Boolean,
+    dynamicIslandButtonEnabledState: Boolean,
     desktopLyricButtonEnabledState: Boolean,
   ) {
     controllerEnabled = controllerEnabledState
+    favoriteButtonEnabled = favoriteButtonEnabledState
+    dynamicIslandButtonEnabled = dynamicIslandButtonEnabledState
     desktopLyricButtonEnabled = desktopLyricButtonEnabledState
     updateMediaSessionButtons()
     updateNotification()
@@ -1253,7 +1282,7 @@ class PlaybackManager private constructor(
         true
       }
       PlaybackConstants.ACTION_DESKTOP_LYRIC -> {
-        if (!desktopLyricButtonEnabled) return false
+        if (!dynamicIslandButtonEnabled) return false
         handleNotificationAction(action)
         true
       }
@@ -2264,7 +2293,7 @@ class PlaybackManager private constructor(
   private fun buildAvailableSessionCommands(): SessionCommands {
     val builder = SessionCommands.Builder().add(nextSessionCommand).add(previousSessionCommand)
     if (currentMetadata.canLike) builder.add(favoriteSessionCommand)
-    if (desktopLyricButtonEnabled) builder.add(desktopLyricSessionCommand)
+    if (dynamicIslandButtonEnabled) builder.add(desktopLyricSessionCommand)
     return builder.build()
   }
 
@@ -2283,7 +2312,8 @@ class PlaybackManager private constructor(
     val buttons = ArrayList<CommandButton>()
     if (!controllerEnabled) return buttons
 
-    if (currentMetadata.canLike) {
+    // 左侧自定义按钮：收藏
+    if (favoriteButtonEnabled && currentMetadata.canLike) {
       buttons.add(
         CommandButton
           .Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
@@ -2312,7 +2342,8 @@ class PlaybackManager private constructor(
         .build(),
     )
 
-    if (desktopLyricButtonEnabled) {
+    // 右侧自定义按钮：灵动岛（外部歌词）开关
+    if (dynamicIslandButtonEnabled) {
       buttons.add(
         CommandButton
           .Builder(CommandButton.ICON_SUBTITLES)
@@ -2408,7 +2439,7 @@ class PlaybackManager private constructor(
 
     var actionCount = 0
 
-    if (currentMetadata.canLike) {
+    if (favoriteButtonEnabled && currentMetadata.canLike) {
       builder.addAction(
         buildNotificationAction(
           if (liked) ICON_GLYPH_FAVORITE_FILLED else ICON_GLYPH_FAVORITE_OUTLINE,
@@ -2453,7 +2484,7 @@ class PlaybackManager private constructor(
       ),
     )
 
-    if (desktopLyricButtonEnabled) {
+    if (dynamicIslandButtonEnabled) {
       builder.addAction(
         buildNotificationAction(
           ICON_GLYPH_LYRIC,

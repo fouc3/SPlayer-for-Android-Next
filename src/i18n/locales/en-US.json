@@ -828,6 +828,7 @@
       "lyricSpring": "Spring Animation",
       "lyricLayout": "Layout & Opacity",
       "externalLyricInputMode": "Input Mode",
+      "androidStatusBarLyric": "Lyricon Status Bar Lyrics",
       "desktopLyric": "Desktop Lyric",
       "dynamicIsland": "Dynamic Island Lyric",
       "taskbarLyric": "Taskbar Lyric",
@@ -995,6 +996,14 @@
     "androidMediaControllerEnabled": {
       "label": "Notification Media Control",
       "description": "Show playback controls in the system notification bar"
+    },
+    "androidMediaControllerFavoriteEnabled": {
+      "label": "Notification Favorite Button",
+      "description": "Show a favorite button on the left of the notification music card to like or unlike the current song"
+    },
+    "androidMediaControllerDynamicIslandEnabled": {
+      "label": "Notification Dynamic Island Toggle",
+      "description": "Show a dynamic island lyric toggle on the right of the notification music card to switch external lyrics on or off"
     },
     "androidAllowMixWithOthers": {
       "label": "Mix With Other Apps",
