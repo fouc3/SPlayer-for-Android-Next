@@ -92,6 +92,8 @@ class PlaybackManager private constructor(
   private val artworkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private val resolveTokenCounter = AtomicLong()
+  /** 原生兜底歌词的竞态令牌：切歌后旧请求作废 */
+  private val islandLyricToken = AtomicLong()
   private val artworkTokenCounter = AtomicLong()
 
   /**
@@ -1857,6 +1859,7 @@ class PlaybackManager private constructor(
       markFmPlayed(track.songId)
     }
     scheduleSongCacheDownload(track)
+    scheduleIslandLyricFetch(track)
 
     plugin?.let {
       val payload = JSObject()
@@ -2292,6 +2295,33 @@ class PlaybackManager private constructor(
     updateDynamicIslandSongInfo(currentMetadata.title, currentMetadata.artist)
     if (LyriconBridge.isAvailable) {
       LyriconBridge.clearSong()
+    }
+  }
+
+  /**
+   * 原生兜底拉取歌词（灵动岛用）。
+   *
+   * 后台切歌时 WebView 的 JS 可能被冻结，新歌歌词推不上来，灵动岛会停在上一首。
+   * 这里由原生直接向嵌入式 API 请求一次行级歌词并推送；JS 恢复后会推逐字歌词覆盖它。
+   * 仅在灵动岛正在显示、且当前是网易云在线曲时执行，避免额外请求与跨平台解析差异。
+   */
+  private fun scheduleIslandLyricFetch(track: PlaybackQueue.Track) {
+    if (dynamicIslandService == null) return
+    if (track.source != "netease" || track.songId <= 0) return
+    val token = islandLyricToken.incrementAndGet()
+    val baseUrl = apiBaseUrl
+    val cookieSnapshot = cookie
+    val songId = track.songId
+    if (baseUrl.isEmpty()) return
+    networkExecutor.execute {
+      val json = NativeLyricFetcher.fetchIslandLyricJson(baseUrl, cookieSnapshot, songId, "netease")
+      if (json == null) return@execute
+      playbackHandler.post {
+        if (token != islandLyricToken.get()) return@post
+        if (currentMetadata.songId != songId) return@post
+        updateDynamicIslandData("[]", json)
+        Log.i(TAG, "原生兜底歌词已推送 song=$songId")
+      }
     }
   }
 
