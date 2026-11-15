@@ -152,10 +152,8 @@ export const useSettingsStore = defineStore(
       spectrumBarWidth: 4,
       reverseSpectrum: false,
       spectrumAlgorithm: "pc",
-      songLevel: "hq",
-      // 默认开启：Wi-Fi 跟随通用档位（hq），移动数据降到 sq，开箱即省流量
-      networkQualityEnabled: true,
-      songLevelWifi: "",
+      // 在线音质按网络分两档：Wi-Fi 用 hq，移动数据降到 sq，开箱即省流量
+      songLevelWifi: "hq",
       songLevelMobile: "sq",
       allowTrialPlay: false,
       timeFormat: "current-total",

@@ -253,14 +253,10 @@ export interface PlayerSettings {
   reverseSpectrum: boolean;
   /** 频谱算法方案：pc 对齐桌面端（Hamming+无重叠+dB[0,60]偏移）；android 保留原生 Hann+50%重叠+dB[-100,-30] */
   spectrumAlgorithm: "pc" | "android";
-  /** 在线歌曲音质偏好；实际可用级别取决于账号权限 */
-  songLevel: QualityLevel;
-  /** 按网络类型区分在线音质（Wi-Fi / 移动数据分别设置） */
-  networkQualityEnabled: boolean;
-  /** Wi-Fi 下的在线音质；空字符串表示跟随 songLevel */
-  songLevelWifi: QualityLevel | "";
-  /** 移动数据下的在线音质；空字符串表示跟随 songLevel */
-  songLevelMobile: QualityLevel | "";
+  /** Wi-Fi 下的在线音质；实际可用级别取决于账号权限 */
+  songLevelWifi: QualityLevel;
+  /** 移动数据下的在线音质；实际可用级别取决于账号权限 */
+  songLevelMobile: QualityLevel;
   /** 允许完整音源不可用时播放试听片段 */
   allowTrialPlay: boolean;
   /** 时间显示格式 */

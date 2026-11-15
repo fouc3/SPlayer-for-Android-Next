@@ -95,31 +95,23 @@ const isMobileDataNetwork = (): boolean => {
 /**
  * 解析当前应使用的在线音质档位
  *
- * 未开启「按网络切换音质」、或对应网络档位设为「跟随通用设置」时，
- * 一律回落到 `player.songLevel`。
+ * 只有「Wi-Fi 音质」与「移动数据音质」两档，按当前网络二选一。
  * @returns 生效的音质档位
  */
 export const effectiveSongLevel = (): QualityLevel => {
   const player = useSettingsStore().player;
-  const base = player.songLevel;
-  if (!player.networkQualityEnabled) return base;
-  const preferred = isMobileDataNetwork() ? player.songLevelMobile : player.songLevelWifi;
-  return (preferred || base) as QualityLevel;
+  return isMobileDataNetwork() ? player.songLevelMobile : player.songLevelWifi;
 };
 
 /**
  * 写入当前网络对应的音质档位
  *
- * 播放页的音质下拉框走这里：开启「按网络切换音质」时，改的是当前网络那一档，
- * 否则用户改了档位却没有任何效果。未开启时直接写通用设置。
+ * 播放页的音质下拉框走这里：改的是「当前网络」那一档。若直接写通用档位，
+ * 用户会看到改了设置却不生效。
  * @param level - 目标音质档位
  */
 export const setEffectiveSongLevel = (level: QualityLevel): void => {
   const player = useSettingsStore().player;
-  if (!player.networkQualityEnabled) {
-    player.songLevel = level;
-    return;
-  }
   if (isMobileDataNetwork()) {
     player.songLevelMobile = level;
   } else {

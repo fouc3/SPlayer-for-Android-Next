@@ -216,8 +216,6 @@ export const installNextTrackPreloadWatchers = (): void => {
   stopContextWatch = watch(
     () => [
       settings.player.preloadNextTrack,
-      settings.player.songLevel,
-      settings.player.networkQualityEnabled,
       settings.player.songLevelWifi,
       settings.player.songLevelMobile,
       settings.player.allowTrialPlay,

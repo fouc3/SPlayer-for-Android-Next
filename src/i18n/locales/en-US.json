@@ -947,12 +947,7 @@
       "sq": "Higher (SQ)",
       "hq": "Extreme (HQ)",
       "lossless": "Lossless",
-      "hi-res": "Hi-Res",
-      "followDefault": "Follow general setting"
-    },
-    "networkQualityEnabled": {
-      "label": "Per-Network Quality",
-      "description": "Use different online quality on Wi-Fi and mobile data; applies from the next track"
+      "hi-res": "Hi-Res"
     },
     "songLevelWifi": {
       "label": "Wi-Fi Quality",
