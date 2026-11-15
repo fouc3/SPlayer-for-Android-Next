@@ -13,6 +13,7 @@ import { useStreamingStore } from "@/stores/streaming";
 import { usePluginsStore } from "@/stores/plugins";
 import { useMediaStore } from "@/stores/media";
 import * as queue from "@/stores/queue";
+import { effectiveSongLevel } from "@/services/networkQuality";
 
 /** 预载结果 */
 export interface NextTrackPreloadResult {
@@ -42,7 +43,8 @@ const buildContextKey = (track: Track): string => {
     track.originalId ?? "",
     track.path ?? "",
     track.cueAudioPath ?? "",
-    settings.player.songLevel,
+    // 按当前网络解析生效档位，避免 Wi-Fi 预载的档位与移动数据起播不一致
+    effectiveSongLevel(),
     settings.player.allowTrialPlay,
     settings.preset.fuckDjMode,
     streaming.activeServerId ?? "",
@@ -215,6 +217,9 @@ export const installNextTrackPreloadWatchers = (): void => {
     () => [
       settings.player.preloadNextTrack,
       settings.player.songLevel,
+      settings.player.networkQualityEnabled,
+      settings.player.songLevelWifi,
+      settings.player.songLevelMobile,
       settings.player.allowTrialPlay,
       settings.preset.fuckDjMode,
       status.playIndex,

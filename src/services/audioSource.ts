@@ -12,6 +12,7 @@ import { normalizeNeteaseMediaUrl } from "@/utils/format/netease";
 import { ErrorCode } from "@shared/types/errors";
 import { handleError } from "@/utils/errors";
 import bridge, { isAndroid } from "@/services/bridge";
+import { effectiveSongLevel } from "@/services/networkQuality";
 
 /** 在线平台 source 与?插件 source key */
 const PLATFORM_TO_PLUGIN_SOURCE: Record<Platform, string> = {
@@ -322,7 +323,8 @@ export const resolveTrackSource = async (
     return localPath ? { source: localPath, fromCache: false, provider: "local" } : null;
   }
   const settings = useSettingsStore();
-  const songLevel = settings.player.songLevel;
+  // 按当前网络（Wi-Fi / 移动数据）解析生效档位
+  const songLevel = effectiveSongLevel();
   const playbackQuality =
     track.source === "netease" ? getNeteasePlaybackQuality(songLevel) : undefined;
   const cacheKey = cacheKeyForTrack(track, songLevel);

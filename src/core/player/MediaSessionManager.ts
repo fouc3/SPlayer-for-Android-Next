@@ -9,6 +9,7 @@ import { usePluginsStore } from "@/stores/plugins";
 import { useHistoryStore } from "@/stores/history";
 import * as queueStore from "@/stores/queue";
 import * as lyricLoader from "@/services/lyric/loader";
+import { effectiveSongLevel } from "@/services/networkQuality";
 import { songsByIds } from "@/apis/song/netease";
 import * as fm from "./fm";
 import { EMBEDDED_API_ORIGIN } from "@/utils/embeddedApi";
@@ -264,7 +265,8 @@ class MediaSessionManager {
     const settings = useSettingsStore();
     const userStore = useUserStore();
     const cookie = userStore.cookie || "";
-    const rawLevel = settings.player.songLevel || "hq";
+    // 按当前网络解析生效档位（原生解析取流时使用）
+    const rawLevel = effectiveSongLevel() || "hq";
     const apiBaseUrl = `${EMBEDDED_API_ORIGIN}/api/netease`;
 
     try {

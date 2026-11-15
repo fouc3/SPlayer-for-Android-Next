@@ -947,7 +947,20 @@
       "sq": "Higher (SQ)",
       "hq": "Extreme (HQ)",
       "lossless": "Lossless",
-      "hi-res": "Hi-Res"
+      "hi-res": "Hi-Res",
+      "followDefault": "Follow general setting"
+    },
+    "networkQualityEnabled": {
+      "label": "Per-Network Quality",
+      "description": "Use different online quality on Wi-Fi and mobile data; applies from the next track"
+    },
+    "songLevelWifi": {
+      "label": "Wi-Fi Quality",
+      "description": "Online quality used when connected to Wi-Fi"
+    },
+    "songLevelMobile": {
+      "label": "Mobile Data Quality",
+      "description": "Online quality used on mobile data; pick a lower level to save data"
     },
     "allowTrialPlay": {
       "label": "Allow Trial Playback",

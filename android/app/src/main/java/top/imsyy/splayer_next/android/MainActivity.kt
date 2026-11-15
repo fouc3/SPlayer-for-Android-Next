@@ -57,6 +57,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(AndroidNativePlaybackPlugin::class.java)
     registerPlugin(AndroidAudioCapturePlugin::class.java)
     registerPlugin(AndroidClipboardPlugin::class.java)
+    registerPlugin(AndroidNetworkPlugin::class.java)
     registerPlugin(AndroidAppIconPlugin::class.java)
     registerPlugin(AndroidLocalLyricPlugin::class.java)
     registerPlugin(AndroidMainLyricPlugin::class.java)

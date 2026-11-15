@@ -86,6 +86,43 @@ const playerCategory: SettingCategory = {
           defaultValue: "hq",
         },
         {
+          key: "networkQualityEnabled",
+          type: "switch",
+          binding: { store: "settings", path: "player.networkQualityEnabled" },
+          defaultValue: true,
+        },
+        {
+          key: "songLevelWifi",
+          type: "select",
+          binding: { store: "settings", path: "player.songLevelWifi" },
+          // 空值 = 跟随上面的通用档位
+          options: [
+            { value: "", labelKey: "settings.songLevel.followDefault" },
+            { value: "lq", labelKey: "settings.songLevel.lq" },
+            { value: "sq", labelKey: "settings.songLevel.sq" },
+            { value: "hq", labelKey: "settings.songLevel.hq" },
+            { value: "lossless", labelKey: "settings.songLevel.lossless" },
+            { value: "hi-res", labelKey: "settings.songLevel.hi-res" },
+          ],
+          defaultValue: "",
+          visible: () => useSettingsStore().player.networkQualityEnabled === true,
+        },
+        {
+          key: "songLevelMobile",
+          type: "select",
+          binding: { store: "settings", path: "player.songLevelMobile" },
+          options: [
+            { value: "", labelKey: "settings.songLevel.followDefault" },
+            { value: "lq", labelKey: "settings.songLevel.lq" },
+            { value: "sq", labelKey: "settings.songLevel.sq" },
+            { value: "hq", labelKey: "settings.songLevel.hq" },
+            { value: "lossless", labelKey: "settings.songLevel.lossless" },
+            { value: "hi-res", labelKey: "settings.songLevel.hi-res" },
+          ],
+          defaultValue: "sq",
+          visible: () => useSettingsStore().player.networkQualityEnabled === true,
+        },
+        {
           key: "allowTrialPlay",
           type: "switch",
           binding: { store: "settings", path: "player.allowTrialPlay" },

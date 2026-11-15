@@ -255,6 +255,12 @@ export interface PlayerSettings {
   spectrumAlgorithm: "pc" | "android";
   /** 在线歌曲音质偏好；实际可用级别取决于账号权限 */
   songLevel: QualityLevel;
+  /** 按网络类型区分在线音质（Wi-Fi / 移动数据分别设置） */
+  networkQualityEnabled: boolean;
+  /** Wi-Fi 下的在线音质；空字符串表示跟随 songLevel */
+  songLevelWifi: QualityLevel | "";
+  /** 移动数据下的在线音质；空字符串表示跟随 songLevel */
+  songLevelMobile: QualityLevel | "";
   /** 允许完整音源不可用时播放试听片段 */
   allowTrialPlay: boolean;
   /** 时间显示格式 */

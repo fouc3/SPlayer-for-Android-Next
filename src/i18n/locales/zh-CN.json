@@ -948,7 +948,20 @@
       "sq": "较高 (SQ)",
       "hq": "极高 (HQ)",
       "lossless": "无损 (Lossless)",
-      "hi-res": "高解析度无损 (Hi-Res)"
+      "hi-res": "高解析度无损 (Hi-Res)",
+      "followDefault": "跟随通用设置"
+    },
+    "networkQualityEnabled": {
+      "label": "按网络切换音质",
+      "description": "Wi-Fi 与移动数据使用不同的在线音质档位，切网后下一首生效"
+    },
+    "songLevelWifi": {
+      "label": "Wi-Fi 音质",
+      "description": "连接 Wi-Fi 时使用的在线音质"
+    },
+    "songLevelMobile": {
+      "label": "移动数据音质",
+      "description": "使用移动数据时使用的在线音质，降低档位可省流量"
     },
     "allowTrialPlay": {
       "label": "允许播放试听",

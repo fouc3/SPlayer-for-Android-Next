@@ -129,6 +129,16 @@ const bootstrapPlayback = async (): Promise<void> => {
     .then((m) => m.startLyriconPush())
     .catch((err) => console.warn("[lyricon] 初始化失败", err));
 
+  // 按网络区分音质：先刷新一次网络类型再恢复播放，否则首曲可能用到未知网络的兜底档位；
+  // 之后由 watcher 在回到前台时继续刷新
+  try {
+    const networkQuality = await import("@/services/networkQuality");
+    await networkQuality.refreshNetworkStatus(true);
+    networkQuality.startNetworkQualityWatcher();
+  } catch (err) {
+    console.warn("[networkQuality] 初始化失败", err);
+  }
+
   const pendingAudioFiles = await window.api.system.consumePendingAudioFiles();
   const pendingOrpheusUrl = await window.api.system.consumePendingProtocolUrl();
 

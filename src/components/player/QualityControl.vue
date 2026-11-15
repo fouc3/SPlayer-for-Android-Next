@@ -2,8 +2,8 @@
 import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { QualityLevel } from "@/utils/quality";
 import { useMediaStore } from "@/stores/media";
-import { useSettingsStore } from "@/stores/settings";
 import { getQualityLabel } from "@/utils/quality";
+import { effectiveSongLevel, setEffectiveSongLevel } from "@/services/networkQuality";
 import * as player from "@/core/player";
 import { isPlatform } from "@shared/types/platform";
 
@@ -11,7 +11,6 @@ withDefaults(defineProps<{ cover?: boolean }>(), { cover: false });
 
 const { t } = useI18n();
 const media = useMediaStore();
-const settings = useSettingsStore();
 
 /** 是否支持切换在线音质 */
 const canSwitchQuality = computed(() => isPlatform(media.track?.source) && !media.track?.cloud);
@@ -32,9 +31,13 @@ const qualityOptions = computed<SSelectOption[]>(() => [
 const chipBase =
   "inline-flex min-w-9 shrink-0 items-center justify-center px-2 py-1 leading-none rounded-md border border-solid text-xs";
 
+/** 当前生效的音质档位（按网络区分时取对应网络的档位） */
+const activeLevel = computed(() => effectiveSongLevel());
+
 /** 切换音质 */
 const onQualityChange = (value: string | number | boolean): void => {
-  settings.player.songLevel = value as QualityLevel;
+  // 开启按网络切换时写入当前网络那一档，避免改了设置却不生效
+  setEffectiveSongLevel(value as QualityLevel);
   void player.reloadCurrentTrack();
 };
 </script>
@@ -42,7 +45,7 @@ const onQualityChange = (value: string | number | boolean): void => {
 <template>
   <SPopselect
     v-if="canSwitchQuality && media.track"
-    :model-value="settings.player.songLevel"
+    :model-value="activeLevel"
     :options="qualityOptions"
     side="top"
     :side-offset="8"
