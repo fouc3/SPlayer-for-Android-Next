@@ -1466,6 +1466,8 @@ class AndroidDownloadManager {
         const finalUsePlayback = usePlayback ?? settingsUsePlayback;
         const result = await getAndroidDownload().resolveDownloadUrl({
           songId: id,
+          // 下载必须按下载音质解析，不能沿用播放音质
+          qualityLevel,
           usePlayback: finalUsePlayback,
         });
         if (!result || !result.url) {

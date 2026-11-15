@@ -2098,7 +2098,8 @@ class PlaybackManager private constructor(
       // 禁止主线程同步阻塞；走后台执行器取新鲜 URL
       var freshUrl: String? = null
       try {
-        freshUrl = urlResolver.resolveDownloadUrlSync(songId, false)?.url
+        // 过期重试属于播放链路，传 null 档位回落到播放音质
+        freshUrl = urlResolver.resolveDownloadUrlSync(songId, null, false)?.url
       } catch (_: Exception) {
       }
       if (freshUrl.isNullOrEmpty()) {
@@ -3232,8 +3233,9 @@ class PlaybackManager private constructor(
    */
   fun resolveDownloadUrl(
     songId: Long,
+    qualityLevel: String?,
     usePlayback: Boolean,
-  ): DownloadUrlResult? = urlResolver.resolveDownloadUrlSync(songId, usePlayback)
+  ): DownloadUrlResult? = urlResolver.resolveDownloadUrlSync(songId, qualityLevel, usePlayback)
 
   class TrackMetadata {
     var songId: Long = 0

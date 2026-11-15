@@ -156,6 +156,8 @@ export interface AndroidDownloadPlugin {
   /** 解析下载 URL（Kotlin 端自主调用嵌入式 API + netease package） */
   resolveDownloadUrl(options: {
     songId: number;
+    /** 下载音质档位（项目内部档位 lq/sq/hq/lossless/hi-res）；缺省时回落到播放音质 */
+    qualityLevel?: string;
     usePlayback?: boolean;
   }): Promise<{ url: string; format?: string; size?: number } | null>;
   /** 移除全部监听器 */

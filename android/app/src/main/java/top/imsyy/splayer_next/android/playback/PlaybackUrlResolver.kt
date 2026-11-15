@@ -64,6 +64,20 @@ class PlaybackUrlResolver(
       return level
     }
 
+    /**
+     * 项目内部音质档位 → 网易云 API level。
+     * 对齐 JS 的 src/apis/song/netease.ts 里 NETEASE_LEVEL 映射。
+     */
+    private fun downloadLevelOf(qualityLevel: String?): String =
+      when (qualityLevel) {
+        "lq" -> "standard"
+        "sq" -> "higher"
+        "hq" -> "exhigh"
+        "lossless" -> "lossless"
+        "hi-res" -> "hires"
+        else -> ""
+      }
+
     private fun getRequestLevels(level: String): Array<String> =
       when (level) {
         "dolby" -> arrayOf("dolby", "hires", "lossless", "exhigh")
@@ -335,8 +349,15 @@ class PlaybackUrlResolver(
    * @param usePlayback true 时跳过下载接口、直接用播放接口（模拟播放下载）
    * @return 下载 URL 结果（含格式/体积）；无可用源返 null
    */
+  /**
+   * 解析下载地址
+   * @param songId - 歌曲 id
+   * @param qualityLevel - 下载音质档位（项目内部档位）；为空时回落到播放音质
+   * @param usePlayback - 是否直接复用播放接口（跳过官方下载接口）
+   */
   fun resolveDownloadUrlSync(
     songId: Long,
+    qualityLevel: String?,
     usePlayback: Boolean,
   ): DownloadUrlResult? {
     if (songId <= 0) return null
@@ -344,7 +365,9 @@ class PlaybackUrlResolver(
     val baseUrl: String
     val cookieValue: String
     synchronized(this) {
-      level = normalizeLevel(songLevel, disableAiAudio)
+      // 下载档位优先；未指定时（旧调用方）才回落到播放音质
+      val downloadLevel = downloadLevelOf(qualityLevel)
+      level = if (downloadLevel.isNotEmpty()) downloadLevel else normalizeLevel(songLevel, disableAiAudio)
       baseUrl = apiBaseUrl
       cookieValue = cookie
     }

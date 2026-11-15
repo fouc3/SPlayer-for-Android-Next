@@ -1276,12 +1276,14 @@ class AndroidDownloadPlugin : Plugin() {
   fun resolveDownloadUrl(call: PluginCall) {
     val songId = call.getLong("songId", 0) ?: 0L
     val usePlayback = call.getBoolean("usePlayback", false) ?: false
+    // 下载音质档位（项目内部档位）；缺省时由原生回落到播放音质
+    val qualityLevel = call.getString("qualityLevel")
     if (songId <= 0) {
       call.reject("songId is required and must be > 0")
       return
     }
     val manager = PlaybackManager.getInstance(context)
-    val result = manager.resolveDownloadUrl(songId, usePlayback)
+    val result = manager.resolveDownloadUrl(songId, qualityLevel, usePlayback)
     if (result != null) {
       val response = JSObject()
       response.put("url", result.url)
